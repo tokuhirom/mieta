@@ -15,6 +15,21 @@ import (
 )
 
 func main() {
+	// Set up logging to a file if MIETA_DEBUG is set
+	if logFilePath := os.Getenv("MIETA_DEBUG"); logFilePath != "" {
+		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatalf("Failed to open log file: %v", err)
+		}
+		defer func(logFile *os.File) {
+			err := logFile.Close()
+			if err != nil {
+				log.Fatalf("Failed to close log file: %v", err)
+			}
+		}(logFile)
+		log.SetOutput(logFile)
+	}
+
 	app := tview.NewApplication()
 
 	// コマンドライン引数でディレクトリを指定
@@ -71,7 +86,13 @@ func main() {
 			textView.ScrollTo(row-9, col)
 		case ' ':
 			row, col := textView.GetScrollOffset()
-			if textView.GetOriginalLineCount() <= row {
+			x, y, width, height := textView.GetRect()
+			log.Printf("row: %d, col: %d, lines: %d, height: %d, (%d,%d,%d,%d)",
+				row, col, textView.GetOriginalLineCount(),
+				textView.GetFieldHeight(),
+				x, y, width, height,
+			)
+			if textView.GetOriginalLineCount() <= row+height {
 				index := listView.GetCurrentItem()
 				if index < listView.GetItemCount()-1 {
 					listView.SetCurrentItem(index + 1)
@@ -142,6 +163,7 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func loadFileContent(textView *tview.TextView, path string) {
+	textView.SetText(fmt.Sprintf("Loading %s", path))
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		textView.SetText(fmt.Sprintf("[red]Error loading file: %v", err))
