@@ -63,6 +63,12 @@ func main() {
 			if index < listView.GetItemCount()-1 {
 				listView.SetCurrentItem(index + 1)
 			}
+		case 'j':
+			row, col := textView.GetScrollOffset()
+			textView.ScrollTo(row+9, col)
+		case 'k':
+			row, col := textView.GetScrollOffset()
+			textView.ScrollTo(row-9, col)
 		}
 		return event
 	})
