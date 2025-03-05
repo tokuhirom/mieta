@@ -65,6 +65,12 @@ func main() {
 		}
 	})
 
+	// Layout
+	flex := tview.NewFlex().
+		AddItem(listView, 30, 1, true).
+		AddItem(tview.NewBox(), 2, 0, false).
+		AddItem(textView, 0, 2, false)
+
 	// キーバインド設定
 	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
@@ -102,15 +108,15 @@ func main() {
 			}
 		case 'q':
 			app.Stop()
+		case rune(tcell.KeyCtrlH):
+			_, _, width, _ := listView.GetRect()
+			flex.ResizeItem(listView, width-2, 1)
+		case rune(tcell.KeyCtrlL):
+			_, _, width, _ := listView.GetRect()
+			flex.ResizeItem(listView, width+2, 1)
 		}
 		return event
 	})
-
-	// Layout
-	flex := tview.NewFlex().
-		AddItem(listView, 30, 1, true).
-		AddItem(tview.NewBox(), 2, 0, false).
-		AddItem(textView, 0, 2, false)
 
 	if err := app.SetRoot(flex, true).SetFocus(listView).Run(); err != nil {
 		panic(err)
@@ -163,15 +169,26 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func loadFileContent(textView *tview.TextView, path string) {
+	log.Printf("Loading %s", path)
 	textView.SetText(fmt.Sprintf("Loading %s", path))
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		textView.SetText(fmt.Sprintf("[red]Error loading file: %v", err))
 		return
 	}
+	log.Printf("Finished reading %s(%d bytes)", path, len(content))
 
 	if !utf8.Valid(content) {
 		textView.SetText("[red]Binary")
+		return
+	}
+
+	// 100KB よりも大きいファイルは重くなるのでハイライトしない
+	highlightLimit := 100 * 1000
+	if len(content) > highlightLimit {
+		log.Printf("File is too large to highlight: %s(%d bytes > %d bytes)", path,
+			len(content), highlightLimit)
+		textView.SetText(string(content))
 		return
 	}
 
@@ -184,4 +201,5 @@ func loadFileContent(textView *tview.TextView, path string) {
 	} else {
 		textView.SetText(string(content))
 	}
+	log.Printf("Loaded %s", path)
 }
