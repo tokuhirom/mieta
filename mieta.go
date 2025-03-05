@@ -49,6 +49,7 @@ func main() {
 	// Layout
 	flex := tview.NewFlex().
 		AddItem(listView, 30, 1, true).
+		AddItem(tview.NewBox(), 2, 0, false).
 		AddItem(textView, 0, 2, false)
 
 	if err := app.SetRoot(flex, true).SetFocus(listView).Run(); err != nil {
