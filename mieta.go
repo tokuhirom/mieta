@@ -133,12 +133,12 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 func loadFileContent(textView *tview.TextView, path string) {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		textView.SetText(fmt.Sprintf("[red]Error loading file: %v[/red]", err))
+		textView.SetText(fmt.Sprintf("[red]Error loading file: %v", err))
 		return
 	}
 
 	if !utf8.Valid(content) {
-		textView.SetText("[red]Binary[/red]")
+		textView.SetText("[red]Binary")
 		return
 	}
 
