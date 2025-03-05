@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	_ "github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-
-	"github.com/rivo/tview"
 )
 
 func main() {
@@ -27,22 +27,22 @@ func main() {
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetWrap(true).
-		SetText("Select a file to view its content")
+		SetText(fmt.Sprintf("Select a file to view its content: %s", rootDir))
 
 	// Load directory items
-	go loadDirectory(listView, rootDir, textView)
+	loadDirectory(listView, rootDir, textView, "")
 
 	listView.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		path := secondaryText
 		fileInfo, err := os.Stat(path)
 		if err != nil {
-			log.Printf("%s, %v", path, err)
+			log.Println(err)
 			return
 		}
-		if fileInfo.IsDir() {
-			textView.SetText("")
-		} else {
+		if !fileInfo.IsDir() {
 			loadFileContent(textView, path)
+		} else {
+			textView.SetText("")
 		}
 	})
 
@@ -56,10 +56,14 @@ func main() {
 	}
 }
 
-// loadDirectory loads directory content into a list view
-func loadDirectory(listView *tview.List, path string, textView *tview.TextView) {
+// loadDirectory loads directory content into a list view with tree-like formatting
+func loadDirectory(listView *tview.List, path string, textView *tview.TextView, prefix string) {
 	listView.Clear()
 
+	walkDirectory(listView, path, textView, prefix)
+}
+
+func walkDirectory(listView *tview.List, path string, textView *tview.TextView, prefix string) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Println(err)
@@ -71,16 +75,27 @@ func loadDirectory(listView *tview.List, path string, textView *tview.TextView) 
 			continue
 		}
 		filePath := filepath.Join(path, file.Name())
-		listView.AddItem(file.Name(), filePath, 0, func() {
+		var displayName string
+		if file.IsDir() {
+			displayName = fmt.Sprintf("%s+ %s", prefix, file.Name())
+		} else {
+			displayName = fmt.Sprintf("%s  %s", prefix, file.Name())
+		}
+		listView.AddItem(displayName, filePath, 0, func() {
 			fileInfo, err := os.Stat(filePath)
 			if err != nil {
-				log.Printf("Cannot load %v", err)
+				log.Println(err)
 				return
 			}
-			if !fileInfo.IsDir() {
+			if fileInfo.IsDir() {
+				loadDirectory(listView, filePath, textView, prefix+"  ")
+			} else {
 				loadFileContent(textView, filePath)
 			}
 		})
+		if file.IsDir() {
+			walkDirectory(listView, filePath, textView, prefix+"  ")
+		}
 	}
 }
 
