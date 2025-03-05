@@ -79,7 +79,7 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 		if file.IsDir() {
 			displayName = fmt.Sprintf("%s+ %s", prefix, file.Name())
 		} else {
-			displayName = fmt.Sprintf("%s  %s", prefix, file.Name())
+			displayName = fmt.Sprintf("%s- %s", prefix, file.Name())
 		}
 		listView.AddItem(displayName, filePath, 0, func() {
 			fileInfo, err := os.Stat(filePath)
