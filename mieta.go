@@ -69,6 +69,8 @@ func main() {
 		case 'k':
 			row, col := textView.GetScrollOffset()
 			textView.ScrollTo(row-9, col)
+		case 'q':
+			app.Stop()
 		}
 		return event
 	})
