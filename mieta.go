@@ -30,8 +30,16 @@ func main() {
 		log.SetOutput(logFile)
 	}
 
+	// コマンドライン引数でディレクトリを指定
+	var rootDir string
+	if len(os.Args) > 1 {
+		rootDir = os.Args[1]
+	} else {
+		rootDir, _ = os.Getwd()
+	}
+
 	mieta := NewMieta()
-	mieta.Run()
+	mieta.Run(rootDir)
 }
 
 type Mieta struct {
@@ -47,16 +55,8 @@ func NewMieta() *Mieta {
 	}
 }
 
-func (m *Mieta) Run() {
+func (m *Mieta) Run(rootDir string) {
 	app := tview.NewApplication()
-
-	// コマンドライン引数でディレクトリを指定
-	var rootDir string
-	if len(os.Args) > 1 {
-		rootDir = os.Args[1]
-	} else {
-		rootDir, _ = os.Getwd()
-	}
 
 	// Create list view
 	listView := tview.NewList()
