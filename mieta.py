@@ -1,67 +1,152 @@
-import curses
-from rich.console import Console
-from rich.tree import Tree
-from rich.syntax import Syntax
+from textual.app import App, ComposeResult
+from textual.containers import Container
+from textual.widgets import Footer, Header, Button, DirectoryTree, TextArea, ListView, ListItem, Label
+
 import os
 
-def build_tree(base_path, parent_tree):
-    for entry in os.listdir(base_path):
-        full_path = os.path.join(base_path, entry)
-        if entry == '.git':
-            parent_tree.add(f"[dim].git[/dim] ...")
-        elif os.path.isdir(full_path):
-            subtree = parent_tree.add(f"[bold]{entry}[/bold]")
-            build_tree(full_path, subtree)
+def scan_directory(path):
+    result = []
+    
+    def _scan(dir_path, prefix=""):
+        try:
+            entries = sorted(os.listdir(dir_path))
+        except PermissionError:
+            return  # Skip directories that cannot be accessed
+
+        for i, entry in enumerate(entries):
+            if entry == '.git':
+                continue
+
+            full_path = os.path.join(dir_path, entry)
+            connector = "└─ " if i == len(entries) - 1 else "├─ "
+            display_name = f"{prefix}{connector}{entry}"
+            result.append((display_name, full_path))
+
+            if os.path.isdir(full_path):
+                extension = "    " if i == len(entries) - 1 else "│  "
+                _scan(full_path, prefix + extension)
+
+    _scan(path)
+    return result
+
+
+class StopwatchApp(App):
+    """A Textual app to manage stopwatches."""
+
+    CSS_PATH = "layout.tcss"
+    BINDINGS = [
+            ("q", "quit", "Quit"),
+            ]
+
+    def compose(self) -> ComposeResult:
+        """Create child widgets for the app."""
+        yield Header()
+        list_items = self.get_list_items()
+        lv =ListView(
+            *list_items
+        )
+        def p(s, q):
+            print(s, q)
+        lv.on_list_view_selected = p
+        lv.focus()
+        ta = TextArea()
+        ta.read_only = True
+        self.ta = ta
+        self.text_container = Container()
+        yield Container(
+            lv,
+            self.text_container,
+            id='top'
+        )
+        yield Footer()
+
+    def action_toggle_dark(self) -> None:
+        """An action to toggle dark mode."""
+        self.theme = (
+            "textual-dark" if self.theme == "textual-light" else "textual-light"
+        )
+
+    # TODO highlight の移動が ws で出来る必要あり
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        """リストビューでアイテムがハイライトされたときに呼ばれるメソッド"""
+        # コンテナの中身をクリア
+        self.text_container.remove_children()
+
+        # ハイライトされたアイテムのファイルパスを取得
+        filename = event.item.file
+
+        # ファイルかディレクトリかを確認
+        if os.path.isfile(filename):
+            try:
+                # ファイル拡張子を取得して言語を推測
+                _, ext = os.path.splitext(filename)
+                language = self.get_language_from_extension(ext)
+                
+                # ファイルを開いてみて、開けるかどうか確認
+                try:
+                    with open(filename, 'r', encoding='utf-8') as f:
+                        editor = TextArea.code_editor(f.read(), language=language)
+                        editor.read_only = True
+                        editor.show_line_numbers = False
+                        self.text_container.mount(editor)
+                except UnicodeDecodeError:
+                    # テキストファイルとして開けない場合
+                    self.text_container.mount(Label(f"[red]Cannot open binary file: {filename}[/red]"))
+                except PermissionError:
+                    # 権限がない場合
+                    self.text_container.mount(Label(f"[red]Permission denied: {filename}[/red]"))
+                except IOError as e:
+                    # その他のIO関連のエラー
+                    self.text_container.mount(Label(f"[red]Error opening file: {filename}[/red]\n{str(e)}"))
+                
+            except Exception as e:
+                # その他の予期しないエラー
+                self.text_container.mount(Label(f"[red]Unexpected error: {str(e)}[/red]"))
         else:
-            parent_tree.add(entry)
+            # ディレクトリの場合は情報メッセージを表示
+            self.text_container.mount(Label(f"Directory: {filename}"))
 
-def main(stdscr):
-    console = Console()
-    base_path = '.'  # Starting directory
-    tree = Tree(base_path)
-    build_tree(base_path, tree)
+    def get_language_from_extension(self, ext: str) -> str:
+        """ファイル拡張子から言語を推測する"""
+        language_map = {
+            ".py": "python",
+            ".tf": "terraform",
+            ".yml": "yaml",
+            ".yaml": "yaml",
+            ".go": "go",
+            ".php": "php",
+            ".pl": "perl",
+            ".kt": "kotlin",
+            ".java": "java",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".html": "html",
+            ".css": "css",
+            ".md": "markdown",
+            ".json": "json",
+            ".sh": "bash",
+            ".rb": "ruby",
+            ".rs": "rust",
+            ".c": "c",
+            ".cpp": "cpp",
+            ".h": "c",
+            ".hpp": "cpp",
+            ".cs": "csharp",
+        }
+        return language_map.get(ext.lower(), None)
 
-    # Initialize curses
-    curses.curs_set(0)
-    stdscr.nodelay(1)
-    stdscr.timeout(100)
+    def get_list_items(self):
+        scanned_files = scan_directory('.')
 
-    # Variables to track state
-    selected_index = 0
-    file_list = [node.label for node in tree.children]
-    preview_offset = 0
+        items = []
+        for display_name, actual_name in scanned_files:
+            item = ListItem(Label(display_name))
+            item.file = actual_name
+            items.append(item)
 
-    while True:
-        stdscr.clear()
+        return items
 
-        # Display the tree
-        for idx, line in enumerate(file_list):
-            if idx == selected_index:
-                stdscr.addstr(idx, 0, line, curses.A_REVERSE)
-            else:
-                stdscr.addstr(idx, 0, line)
-
-        # Display the preview of the selected file
-        if os.path.isfile(file_list[selected_index]):
-            with open(file_list[selected_index], 'r') as f:
-                code = f.read()
-            syntax = Syntax(code, "auto", theme="monokai", line_numbers=True)
-            console.print(syntax, overflow="ignore", new_line_start=False)
-
-        # Input handling
-        key = stdscr.getch()
-        if key == ord('q'):
-            break
-        elif key == ord('w'):
-            selected_index = max(0, selected_index - 1)
-        elif key == ord('s'):
-            selected_index = min(len(file_list) - 1, selected_index + 1)
-        elif key == ord('j'):
-            preview_offset += 1
-        elif key == ord('k'):
-            preview_offset = max(0, preview_offset - 1)
-
-        stdscr.refresh()
 
 if __name__ == "__main__":
-    curses.wrapper(main)
+    app = StopwatchApp()
+    app.run()
