@@ -48,12 +48,14 @@ func main() {
 type Mieta struct {
 	HighlightLimit int
 	MaxLines       *int
+	ChromaStyle    string
 }
 
 func NewMieta() *Mieta {
 	maxLines := 100
 	return &Mieta{
 		HighlightLimit: 100 * 1024,
+		ChromaStyle:    "dracula",
 		MaxLines:       &maxLines,
 	}
 }
@@ -220,7 +222,7 @@ func (m *Mieta) loadFileContent(textView *tview.TextView, path string) {
 	fileExt := filepath.Ext(path)
 
 	var highlighted bytes.Buffer
-	if err := quick.Highlight(&highlighted, string(content), fileExt, "terminal", "monokai"); err == nil {
+	if err := quick.Highlight(&highlighted, string(content), fileExt, "terminal", m.ChromaStyle); err == nil {
 		textView.SetText(tview.TranslateANSI(highlighted.String()))
 	} else {
 		textView.SetText(string(content))
