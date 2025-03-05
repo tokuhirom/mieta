@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 )
 
 func main() {
@@ -104,48 +105,24 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func loadFileContent(textView *tview.TextView, path string) {
-	data, err := ioutil.ReadFile(path)
+	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		textView.SetText(fmt.Sprintf("[red]Error loading file: %v[/red]", err))
 		return
 	}
 
-	// Detect syntax highlighting based on file extension
-	fileExt := filepath.Ext(path)
-	var lexer string
-	switch fileExt {
-	case ".go":
-		lexer = "go"
-	case ".py":
-		lexer = "python"
-	case ".js":
-		lexer = "javascript"
-	case ".ts":
-		lexer = "typescript"
-	case ".json":
-		lexer = "json"
-	case ".yaml", ".yml":
-		lexer = "yaml"
-	case ".html":
-		lexer = "html"
-	case ".css":
-		lexer = "css"
-	case ".sh":
-		lexer = "bash"
-	case ".md":
-		lexer = "markdown"
-	default:
-		lexer = ""
+	if !utf8.Valid(content) {
+		textView.SetText("[red]Binary[/red]")
+		return
 	}
 
-	if lexer != "" {
-		var highlighted bytes.Buffer
-		if err := quick.Highlight(&highlighted, string(data), lexer, "terminal", "monokai"); err == nil {
-			textView.SetText(tview.TranslateANSI(highlighted.String()))
-		} else {
-			textView.SetText(string(data))
-		}
+	// Detect syntax highlighting based on file extension
+	fileExt := filepath.Ext(path)
+
+	var highlighted bytes.Buffer
+	if err := quick.Highlight(&highlighted, string(content), fileExt, "terminal", "monokai"); err == nil {
+		textView.SetText(tview.TranslateANSI(highlighted.String()))
 	} else {
-		textView.SetText(string(data))
+		textView.SetText(string(content))
 	}
 }
