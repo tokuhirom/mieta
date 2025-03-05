@@ -1,63 +1,62 @@
-# MIETA - ディレクトリツリーとファイルプレビューのCLIツール
+# MIETA - CLI Tool for Directory Tree and File Preview
 
-## 概要
-MIETAは、ターミナル上でディレクトリ構造を視覚的に表示し、選択したファイルの内容をプレビューできるCLIツールです。「見えた」という意味を持つ名前のとおり、コードやファイルを簡単に閲覧することができます。
-(名前はもちろん､MIEL をリスペクトしています)
+## Overview
+MIETA is a CLI tool that visually displays directory structures in the terminal and allows you to preview the contents of selected files. As the name suggests, it allows you to "see" (MIETA) code and files easily. (The name is, of course, a nod to MIEL.)
 
-## 主な機能
+![img.png](img.png)
 
-### ディレクトリツリー表示
-- ディレクトリ構造をツリー形式で表示
-- `.git`ディレクトリは自動的に除外
-- ツリー表示は非同期で行われ、大きなディレクトリでもUIがブロックされない
-
-### ファイルプレビュー
-- 選択したファイルの内容をシンタックスハイライト付きで表示
-- 多様なプログラミング言語に対応（Python, Go, Terraform, YAML, PHP, Perl, Kotlin, Java, JavaScript, TypeScript, HTML, CSS, Markdown, JSON, Bash, Ruby, Rust, C, C++, C#など）
-- バイナリファイルや権限エラーなどに対する適切なエラーメッセージ表示
-
-### キーボードナビゲーション
-- `w`/`s`: ツリー内で上下に移動
-- `j`/`k`: プレビュー内でページ単位のスクロール
-- `shift+h`/`shift+l`: ツリー表示部とプレビュー表示部の幅を調整
-- `q`: アプリケーションを終了
-
-### レイアウト
-- 左側にディレクトリツリー、右側にファイルプレビューを表示
-- 幅の比率は動的に調整可能
-
-### コマンドライン引数
-- 起動時にディレクトリパスを指定可能
-- 指定がない場合は現在のディレクトリを使用
-
-## 技術的特徴
-
-### フレームワーク
-- tview フレームワークを使用したTUIアプリケーション
-
-### 非同期処理
-- ディレクトリスキャンはワーカーを使用して非同期で実行
-- UIのレスポンシブ性を確保
-
-### エラーハンドリング
-- ファイルが開けない場合の適切なエラーメッセージ表示
-- バイナリファイル、権限エラー、その他のIOエラーに対応
-
-### カスタマイズ可能なレイアウト
-- 動的にペインの幅を調整可能
-- フレックスボックスベースのレイアウト
-
-## 今後の拡張可能性
-- 検索機能: ファイル内のテキスト検索
-- フィルタリング: 特定の拡張子や名前パターンでファイルをフィルタリング
-- テーマカスタマイズ: ユーザー好みの色テーマを設定
-- キーバインドのカスタマイズ: ユーザー定義のキーバインドをサポート
-
-## 使用方法
+## Install
 
 ```bash
 go install github.com/tokuhirom/mieta@latest
 ```
 
-このツールは、コードの閲覧や探索を効率化し、ターミナル上での作業をより快適にすることを目的としています。
+## Main Features
+
+### Directory Tree Display
+-  Displays directory structure in a tree format
+-  Automatically excludes `.git` directories
+-  Tree display is asynchronous, ensuring the UI is not blocked even with large directories
+
+### File Preview
+-  Shows the contents of selected files with syntax highlighting
+-  Supports various programming languages (Python, Go, Terraform, YAML, PHP, Perl, Kotlin, Java, JavaScript, TypeScript, HTML, CSS, Markdown, JSON, Bash, Ruby, Rust, C, C++, C#, etc.)
+-  Displays appropriate error messages for binary files or permission errors
+
+### Keyboard Navigation
+-  `w`/`s`: Move up and down within the tree
+-  `j`/`k`: Scroll by page in the preview
+-  `shift+h`/`shift+l`: Adjust the width of the tree and preview panes
+-  `q`: Exit the application
+
+### Layout
+-  Displays the directory tree on the left and file preview on the right
+-  The width ratio is dynamically adjustable
+
+### Command Line Arguments
+-  Allows specifying a directory path at startup
+-  Uses the current directory if no path is specified
+
+## Technical Features
+
+### Framework
+-  TUI application built using the tview framework
+
+### Asynchronous Processing
+-  Directory scanning is performed asynchronously using workers
+-  Ensures responsive UI
+
+### Error Handling
+-  Displays appropriate error messages when files cannot be opened
+-  Handles binary files, permission errors, and other IO errors
+
+### Customizable Layout
+-  Dynamically adjustable pane widths
+-  Flexbox-based layout
+
+## Future Expansion Possibilities
+-  Search Functionality: Text search within files
+-  Filtering: Filter files by specific extensions or name patterns
+-  Theme Customization: Set user-preferred color themes
+-  Custom Keybindings: Support for user-defined keybindings
 
