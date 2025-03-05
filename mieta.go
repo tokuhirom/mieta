@@ -30,6 +30,24 @@ func main() {
 		log.SetOutput(logFile)
 	}
 
+	mieta := NewMieta()
+	mieta.Run()
+}
+
+type Mieta struct {
+	HighlightLimit int
+	MaxLines       *int
+}
+
+func NewMieta() *Mieta {
+	maxLines := 100
+	return &Mieta{
+		HighlightLimit: 100 * 1024,
+		MaxLines:       &maxLines,
+	}
+}
+
+func (m *Mieta) Run() {
 	app := tview.NewApplication()
 
 	// コマンドライン引数でディレクトリを指定
@@ -47,9 +65,12 @@ func main() {
 		SetDynamicColors(true).
 		SetWrap(true).
 		SetText(fmt.Sprintf("Select a file to view its content: %s", rootDir))
+	if m.MaxLines != nil {
+		textView.SetMaxLines(*m.MaxLines)
+	}
 
 	// Load directory items
-	loadDirectory(listView, rootDir, textView, "")
+	go m.loadDirectory(listView, rootDir, textView, "")
 
 	listView.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		path := secondaryText
@@ -59,7 +80,7 @@ func main() {
 			return
 		}
 		if !fileInfo.IsDir() {
-			loadFileContent(textView, path)
+			m.loadFileContent(textView, path)
 		} else {
 			textView.SetText("")
 		}
@@ -124,13 +145,13 @@ func main() {
 }
 
 // loadDirectory loads directory content into a list view with tree-like formatting
-func loadDirectory(listView *tview.List, path string, textView *tview.TextView, prefix string) {
+func (m *Mieta) loadDirectory(listView *tview.List, path string, textView *tview.TextView, prefix string) {
 	listView.Clear()
 
-	walkDirectory(listView, path, textView, prefix)
+	m.walkDirectory(listView, path, textView, prefix)
 }
 
-func walkDirectory(listView *tview.List, path string, textView *tview.TextView, prefix string) {
+func (m *Mieta) walkDirectory(listView *tview.List, path string, textView *tview.TextView, prefix string) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Println(err)
@@ -158,17 +179,17 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 			if fileInfo.IsDir() {
 				//loadDirectory(listView, filePath, textView, prefix+"  ")
 			} else {
-				loadFileContent(textView, filePath)
+				m.loadFileContent(textView, filePath)
 			}
 		})
 		if file.IsDir() {
-			walkDirectory(listView, filePath, textView, prefix+"  ")
+			m.walkDirectory(listView, filePath, textView, prefix+"  ")
 		}
 	}
 }
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
-func loadFileContent(textView *tview.TextView, path string) {
+func (m *Mieta) loadFileContent(textView *tview.TextView, path string) {
 	log.Printf("Loading %s", path)
 	textView.SetText(fmt.Sprintf("Loading %s", path))
 	content, err := ioutil.ReadFile(path)
@@ -184,7 +205,7 @@ func loadFileContent(textView *tview.TextView, path string) {
 	}
 
 	// 100KB よりも大きいファイルは重くなるのでハイライトしない
-	highlightLimit := 100 * 1000
+	highlightLimit := m.HighlightLimit
 	if len(content) > highlightLimit {
 		log.Printf("File is too large to highlight: %s(%d bytes > %d bytes)", path,
 			len(content), highlightLimit)
