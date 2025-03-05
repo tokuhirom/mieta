@@ -61,6 +61,8 @@ class StopwatchApp(App):
         ("s", "move_down", "Move Down"),
         ("j", "scroll_down", "Scroll Down"),
         ("k", "scroll_up", "Scroll Up"),
+        ("z", "narrow_tree", "Narrow Tree"),
+        ("x", "widen_tree", "Widen Tree"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -69,6 +71,8 @@ class StopwatchApp(App):
         list_items, limited = self.get_list_items()
         self.lv = ListView(*list_items)
         self.lv.focus()
+
+        self.tree_width = 30  # デフォルトのツリー幅
 
         ta = TextArea()
         ta.read_only = True
@@ -109,7 +113,6 @@ class StopwatchApp(App):
             if isinstance(child, TextArea):
                 child.action_cursor_page_up()
 
-    # TODO highlight の移動が ws で出来る必要あり
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         """リストビューでアイテムがハイライトされたときに呼ばれるメソッド"""
         # コンテナの中身をクリア
@@ -198,6 +201,27 @@ class StopwatchApp(App):
 
         return items, limited
 
+    def on_mount(self) -> None:
+        """マウント時に初期レイアウトを設定"""
+        self.update_layout()
+
+    def update_layout(self) -> None:
+        """レイアウトを更新する"""
+        # CSSを動的に更新して幅を変更
+        self.lv.styles.width = f"{self.tree_width}fr"
+        self.text_container.styles.width = f"{100 - self.tree_width}fr"
+
+    def action_narrow_tree(self) -> None:
+        """Shift+Hでツリー表示部を狭くする"""
+        if self.tree_width > 10:  # 最小幅を設定
+            self.tree_width -= 5
+            self.update_layout()
+
+    def action_widen_tree(self) -> None:
+        """Shift+Lでツリー表示部を広くする"""
+        if self.tree_width < 70:  # 最大幅を設定
+            self.tree_width += 5
+            self.update_layout()
 
 if __name__ == "__main__":
     import sys
