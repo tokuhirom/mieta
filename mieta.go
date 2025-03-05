@@ -69,6 +69,16 @@ func main() {
 		case 'k':
 			row, col := textView.GetScrollOffset()
 			textView.ScrollTo(row-9, col)
+		case ' ':
+			row, col := textView.GetScrollOffset()
+			if textView.GetOriginalLineCount() <= row {
+				index := listView.GetCurrentItem()
+				if index < listView.GetItemCount()-1 {
+					listView.SetCurrentItem(index + 1)
+				}
+			} else {
+				textView.ScrollTo(row+9, col)
+			}
 		case 'q':
 			app.Stop()
 		}
@@ -105,6 +115,7 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 			continue
 		}
 		filePath := filepath.Join(path, file.Name())
+
 		var displayName string
 		if file.IsDir() {
 			displayName = fmt.Sprintf("%s+ %s", prefix, file.Name())
@@ -118,7 +129,7 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 				return
 			}
 			if fileInfo.IsDir() {
-				loadDirectory(listView, filePath, textView, prefix+"  ")
+				//loadDirectory(listView, filePath, textView, prefix+"  ")
 			} else {
 				loadFileContent(textView, filePath)
 			}
