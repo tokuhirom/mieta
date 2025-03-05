@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	_ "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -28,6 +29,8 @@ func main() {
 			}
 		}(logFile)
 		log.SetOutput(logFile)
+	} else {
+		log.SetOutput(io.Discard)
 	}
 
 	// コマンドライン引数でディレクトリを指定
