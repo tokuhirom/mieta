@@ -129,10 +129,10 @@ func (m *Mieta) Run(rootDir string) {
 			}
 		case 'q':
 			app.Stop()
-		case rune(tcell.KeyCtrlH):
+		case 'H':
 			_, _, width, _ := listView.GetRect()
 			flex.ResizeItem(listView, width-2, 1)
-		case rune(tcell.KeyCtrlL):
+		case 'L':
 			_, _, width, _ := listView.GetRect()
 			flex.ResizeItem(listView, width+2, 1)
 		}
