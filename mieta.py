@@ -2,15 +2,15 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import (
     Footer,
-    Header,
-    Button,
     DirectoryTree,
     TextArea,
     ListView,
     ListItem,
     Label,
+    Static,
 )
 from textual.binding import Binding
+from textual.worker import Worker, WorkerState
 
 import os
 
@@ -67,10 +67,11 @@ class StopwatchApp(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
-        yield Header()
         list_items, limited = self.get_list_items()
         self.lv = ListView(*list_items)
         self.lv.focus()
+
+        self.tree_progress = Static("Loading...", id="tree_progress")
 
         self.tree_width = 30  # デフォルトのツリー幅
 
@@ -80,7 +81,8 @@ class StopwatchApp(App):
         self.text_container = Container()
         if limited:
             yield Label("[red]too much items in {self.directory}... some files are snipped[/red]")
-        yield Container(self.lv, self.text_container, id="top")
+        self.tree_container = Container(self.lv, self.tree_progress)
+        yield Container(self.tree_container, self.text_container, id="top")
         yield Footer()
 
     def action_toggle_dark(self) -> None:
@@ -205,10 +207,60 @@ class StopwatchApp(App):
         """マウント時に初期レイアウトを設定"""
         self.update_layout()
 
+        self.load_directory(self.directory)
+
+    async def load_directory(self, path):
+        """非同期でディレクトリをロードする"""
+        self.lv.clear()
+        
+        progress = self.query_one("#tree_progress")
+        progress.update('wow')
+        progress.refresh()
+        # ワーカーを使ってディレクトリをスキャン
+        worker = Worker(self.scan_directory_worker, path)
+        worker.start()
+
+    def scan_directory_worker(self, path):
+        """ワーカーでディレクトリをスキャンする"""
+        result = []
+        
+        def _scan(dir_path, prefix=""):
+            try:
+                entries = sorted(os.listdir(dir_path))
+            except PermissionError:
+                return  # Skip directories that cannot be accessed
+
+            for i, entry in enumerate(entries):
+                if entry == '.git':
+                    continue
+
+                full_path = os.path.join(dir_path, entry)
+                connector = "└─ " if i == len(entries) - 1 else "├─ "
+                display_name = f"{prefix}{connector}{entry}"
+
+                # 新しいアイテムを追加
+                item = ListItem(Label(display_name))
+                item.file = full_path
+                self.lv.append(item)
+
+                txt = str(len(self.lv.items))
+                self.query_one("#tree_progress").update('wow')
+
+                self.tree_progress.label = txt
+                self.tree_progress.update(txt)
+                self.tree_progress.refresh()
+
+                if os.path.isdir(full_path):
+                    extension = "    " if i == len(entries) - 1 else "│  "
+                    _scan(full_path, prefix + extension)
+
+        _scan(path)
+        return result
+
     def update_layout(self) -> None:
         """レイアウトを更新する"""
         # CSSを動的に更新して幅を変更
-        self.lv.styles.width = f"{self.tree_width}fr"
+        self.tree_container.styles.width = f"{self.tree_width}fr"
         self.text_container.styles.width = f"{100 - self.tree_width}fr"
 
     def action_narrow_tree(self) -> None:
