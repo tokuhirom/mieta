@@ -54,8 +54,9 @@ MIETAは、ターミナル上でディレクトリ構造を視覚的に表示し
 - キーバインドのカスタマイズ: ユーザー定義のキーバインドをサポート
 
 ## 使用方法
+
 ```bash
-python mieta.py [directory_path]
+go install github.com/tokuhirom/mieta@latest
 ```
 
 このツールは、コードの閲覧や探索を効率化し、ターミナル上での作業をより快適にすることを目的としています。
