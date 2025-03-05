@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/alecthomas/chroma/quick"
 	_ "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"io/ioutil"
@@ -100,12 +102,50 @@ func walkDirectory(listView *tview.List, path string, textView *tview.TextView, 
 	}
 }
 
-// loadFileContent loads and displays file content in the text view
+// loadFileContent loads and displays file content in the text view with syntax highlighting
 func loadFileContent(textView *tview.TextView, path string) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		textView.SetText(fmt.Sprintf("[red]Error loading file: %v[/red]", err))
 		return
 	}
-	textView.SetText(string(data))
+
+	// Detect syntax highlighting based on file extension
+	fileExt := filepath.Ext(path)
+	var lexer string
+	switch fileExt {
+	case ".go":
+		lexer = "go"
+	case ".py":
+		lexer = "python"
+	case ".js":
+		lexer = "javascript"
+	case ".ts":
+		lexer = "typescript"
+	case ".json":
+		lexer = "json"
+	case ".yaml", ".yml":
+		lexer = "yaml"
+	case ".html":
+		lexer = "html"
+	case ".css":
+		lexer = "css"
+	case ".sh":
+		lexer = "bash"
+	case ".md":
+		lexer = "markdown"
+	default:
+		lexer = ""
+	}
+
+	if lexer != "" {
+		var highlighted bytes.Buffer
+		if err := quick.Highlight(&highlighted, string(data), lexer, "terminal", "monokai"); err == nil {
+			textView.SetText(tview.TranslateANSI(highlighted.String()))
+		} else {
+			textView.SetText(string(data))
+		}
+	} else {
+		textView.SetText(string(data))
+	}
 }
