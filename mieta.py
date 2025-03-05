@@ -1,12 +1,24 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import Footer, Header, Button, DirectoryTree, TextArea, ListView, ListItem, Label
+from textual.widgets import (
+    Footer,
+    Header,
+    Button,
+    DirectoryTree,
+    TextArea,
+    ListView,
+    ListItem,
+    Label,
+)
+from textual.binding import Binding
 
 import os
 
-def scan_directory(path):
+
+def scan_directory(path, limit=None):
     result = []
-    
+    limited = False
+
     def _scan(dir_path, prefix=""):
         try:
             entries = sorted(os.listdir(dir_path))
@@ -14,7 +26,7 @@ def scan_directory(path):
             return  # Skip directories that cannot be accessed
 
         for i, entry in enumerate(entries):
-            if entry == '.git':
+            if entry == ".git":
                 continue
 
             full_path = os.path.join(dir_path, entry)
@@ -22,42 +34,49 @@ def scan_directory(path):
             display_name = f"{prefix}{connector}{entry}"
             result.append((display_name, full_path))
 
+            if limit and len(result) >= limit:
+                limited = True
+                break
+
             if os.path.isdir(full_path):
                 extension = "    " if i == len(entries) - 1 else "│  "
                 _scan(full_path, prefix + extension)
 
     _scan(path)
-    return result
+    return result, limited
 
 
 class StopwatchApp(App):
     """A Textual app to manage stopwatches."""
 
+    def __init__(self, directory='.', limit=1000, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.directory = directory
+        self.limit = limit
+
     CSS_PATH = "layout.tcss"
     BINDINGS = [
-            ("q", "quit", "Quit"),
-            ]
+        ("q", "quit", "Quit"),
+        ("w", "move_up", "Move Up"),
+        ("s", "move_down", "Move Down"),
+        ("j", "scroll_down", "Scroll Down"),
+        ("k", "scroll_up", "Scroll Up"),
+    ]
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
-        list_items = self.get_list_items()
-        lv =ListView(
-            *list_items
-        )
-        def p(s, q):
-            print(s, q)
-        lv.on_list_view_selected = p
-        lv.focus()
+        list_items, limited = self.get_list_items()
+        self.lv = ListView(*list_items)
+        self.lv.focus()
+
         ta = TextArea()
         ta.read_only = True
         self.ta = ta
         self.text_container = Container()
-        yield Container(
-            lv,
-            self.text_container,
-            id='top'
-        )
+        if limited:
+            yield Label("[red]too much items in {self.directory}... some files are snipped[/red]")
+        yield Container(self.lv, self.text_container, id="top")
         yield Footer()
 
     def action_toggle_dark(self) -> None:
@@ -65,6 +84,30 @@ class StopwatchApp(App):
         self.theme = (
             "textual-dark" if self.theme == "textual-light" else "textual-light"
         )
+
+    def action_move_up(self) -> None:
+        """wキーでリストを上に移動"""
+        if self.lv.index > 0:
+            self.lv.index -= 1
+
+    def action_move_down(self) -> None:
+        """sキーでリストを下に移動"""
+        if self.lv.index < len(self.lv.children) - 1:
+            self.lv.index += 1
+
+    def action_scroll_down(self) -> None:
+        """jキーでプレビューを下にスクロール"""
+        # プレビューエリアにフォーカスを当てる
+        for child in self.text_container.children:
+            if isinstance(child, TextArea):
+                child.action_cursor_page_down()
+
+    def action_scroll_up(self) -> None:
+        """kキーでプレビューを上にスクロール"""
+        # プレビューエリアにフォーカスを当てる
+        for child in self.text_container.children:
+            if isinstance(child, TextArea):
+                child.action_cursor_page_up()
 
     # TODO highlight の移動が ws で出来る必要あり
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
@@ -81,27 +124,36 @@ class StopwatchApp(App):
                 # ファイル拡張子を取得して言語を推測
                 _, ext = os.path.splitext(filename)
                 language = self.get_language_from_extension(ext)
-                
+
                 # ファイルを開いてみて、開けるかどうか確認
                 try:
-                    with open(filename, 'r', encoding='utf-8') as f:
+                    with open(filename, "r", encoding="utf-8") as f:
+                        self.text_container.mount(Label(f"{filename}"))
                         editor = TextArea.code_editor(f.read(), language=language)
                         editor.read_only = True
                         editor.show_line_numbers = False
                         self.text_container.mount(editor)
                 except UnicodeDecodeError:
                     # テキストファイルとして開けない場合
-                    self.text_container.mount(Label(f"[red]Cannot open binary file: {filename}[/red]"))
+                    self.text_container.mount(
+                        Label(f"[red]Cannot open binary file: {filename}[/red]")
+                    )
                 except PermissionError:
                     # 権限がない場合
-                    self.text_container.mount(Label(f"[red]Permission denied: {filename}[/red]"))
+                    self.text_container.mount(
+                        Label(f"[red]Permission denied: {filename}[/red]")
+                    )
                 except IOError as e:
                     # その他のIO関連のエラー
-                    self.text_container.mount(Label(f"[red]Error opening file: {filename}[/red]\n{str(e)}"))
-                
+                    self.text_container.mount(
+                        Label(f"[red]Error opening file: {filename}[/red]\n{str(e)}")
+                    )
+
             except Exception as e:
                 # その他の予期しないエラー
-                self.text_container.mount(Label(f"[red]Unexpected error: {str(e)}[/red]"))
+                self.text_container.mount(
+                    Label(f"[red]Unexpected error: {str(e)}[/red]")
+                )
         else:
             # ディレクトリの場合は情報メッセージを表示
             self.text_container.mount(Label(f"Directory: {filename}"))
@@ -136,7 +188,7 @@ class StopwatchApp(App):
         return language_map.get(ext.lower(), None)
 
     def get_list_items(self):
-        scanned_files = scan_directory('.')
+        scanned_files, limited = scan_directory(self.directory, self.limit)
 
         items = []
         for display_name, actual_name in scanned_files:
@@ -144,9 +196,11 @@ class StopwatchApp(App):
             item.file = actual_name
             items.append(item)
 
-        return items
+        return items, limited
 
 
 if __name__ == "__main__":
-    app = StopwatchApp()
+    import sys
+    directory = sys.argv[1] if len(sys.argv) > 1 else '.'
+    app = StopwatchApp(directory)
     app.run()
