@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/alecthomas/chroma/quick"
+	"github.com/gdamore/tcell/v2"
 	_ "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"io/ioutil"
@@ -47,6 +48,23 @@ func main() {
 		} else {
 			textView.SetText("")
 		}
+	})
+
+	// キーバインド設定
+	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'w':
+			index := listView.GetCurrentItem()
+			if index > 0 {
+				listView.SetCurrentItem(index - 1)
+			}
+		case 's':
+			index := listView.GetCurrentItem()
+			if index < listView.GetItemCount()-1 {
+				listView.SetCurrentItem(index + 1)
+			}
+		}
+		return event
 	})
 
 	// Layout
