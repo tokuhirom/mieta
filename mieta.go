@@ -109,11 +109,6 @@ func (m *Mieta) Run(rootDir string) {
 
 	helpView := mieta.NewHelpView(pages)
 	pages.AddPage("help", helpView.Flex, true, false)
-	//modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-	//	if buttonLabel == "OK" {
-	//		pages.HidePage("help")
-	//	}
-	//})
 
 	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
