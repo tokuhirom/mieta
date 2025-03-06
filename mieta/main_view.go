@@ -6,6 +6,7 @@ import (
 	"github.com/alecthomas/chroma/quick"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"image/jpeg"
 	"log"
 	"os"
 	"path/filepath"
@@ -49,7 +50,7 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 	flex := tview.NewFlex().
 		AddItem(listView, 30, 1, true).
 		AddItem(tview.NewBox(), 1, 0, false).
-		AddItem(previewTextView, 0, 2, false)
+		AddItem(previewPages, 0, 2, false)
 
 	// キーバインド設定
 	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -172,6 +173,42 @@ func (m *MainView) walkDirectory(config *Config, listView *tview.List, path stri
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func (m *MainView) loadFileContent(config *Config, path string) {
+	fileExt := filepath.Ext(path)
+	if fileExt == ".jpg" || fileExt == ".jpeg" {
+		log.Printf("Loading image: %s", path)
+		m.loadImage(path)
+	} else {
+		m.loadTextFile(config, path)
+	}
+}
+
+func (m *MainView) loadImage(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		log.Printf("Failed to open image file: %v", err)
+		return
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Printf("Failed to close image file: %v", err)
+		}
+	}(file)
+
+	image, err := jpeg.Decode(file)
+	if err != nil {
+		log.Printf("Failed to decode image: %v", err)
+		return
+	}
+
+	log.Printf("Displaying image: %s", path)
+	m.PreviewPages.SwitchToPage("image")
+	m.PreviewImageView.SetImage(image)
+}
+
+func (m *MainView) loadTextFile(config *Config, path string) {
+	m.PreviewPages.SwitchToPage("text")
+
 	log.Printf("Loading %s", path)
 	m.PreviewTextView.SetText(fmt.Sprintf("Loading %s", path))
 	content, err := os.ReadFile(path)
