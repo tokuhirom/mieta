@@ -123,6 +123,8 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 				case 'k':
 					row, col := previewTextView.GetScrollOffset()
 					previewTextView.ScrollTo(row-9, col)
+				case 'q':
+					app.Stop()
 				case '?':
 					pages.ShowPage("help")
 					app.SetFocus(helpView.CloseButton)
