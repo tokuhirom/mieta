@@ -9,6 +9,7 @@ import (
 	"github.com/srwiley/oksvg"
 	"github.com/srwiley/rasterx"
 	"image"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"log"
@@ -225,7 +226,7 @@ func (m *MainView) walkDirectory(config *Config, listView *tview.List, path stri
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func (m *MainView) loadFileContent(config *Config, path string) {
 	fileExt := filepath.Ext(path)
-	if fileExt == ".jpg" || fileExt == ".jpeg" || fileExt == ".png" || fileExt == ".svg" {
+	if fileExt == ".jpg" || fileExt == ".jpeg" || fileExt == ".png" || fileExt == ".gif" || fileExt == ".svg" {
 		log.Printf("Loading image: %s", path)
 		m.loadImage(path, fileExt)
 	} else {
@@ -262,6 +263,9 @@ func (m *MainView) loadImage(path string, fileExt string) {
 		loadImage(decoded, err)
 	} else if fileExt == ".png" {
 		decoded, err := png.Decode(file)
+		loadImage(decoded, err)
+	} else if fileExt == ".gif" {
+		decoded, err := gif.Decode(file)
 		loadImage(decoded, err)
 	} else if fileExt == ".svg" {
 		icon, err := oksvg.ReadIconStream(file)
