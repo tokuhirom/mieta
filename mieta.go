@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	_ "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/tokuhirom/mieta/mieta"
 	"io"
 	"io/ioutil"
 	"log"
@@ -103,6 +104,30 @@ func (m *Mieta) Run(rootDir string) {
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(textView, 0, 2, false)
 
+	pages := tview.NewPages().
+		AddPage("background", flex, true, true)
+
+	helpView := mieta.NewHelpView(pages)
+	pages.AddPage("help", helpView.Flex, true, false)
+	//modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+	//	if buttonLabel == "OK" {
+	//		pages.HidePage("help")
+	//	}
+	//})
+
+	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			log.Printf("Hide help page")
+			pages.HidePage("help")
+		}
+		switch event.Rune() {
+		case 'q':
+			app.Stop()
+		}
+		return event
+	})
+
 	// キーバインド設定
 	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
@@ -122,6 +147,9 @@ func (m *Mieta) Run(rootDir string) {
 		case 'k':
 			row, col := textView.GetScrollOffset()
 			textView.ScrollTo(row-9, col)
+		case '?':
+			pages.ShowPage("help")
+			app.SetFocus(helpView.CloseButton)
 		case ' ':
 			row, col := textView.GetScrollOffset()
 			x, y, width, height := textView.GetRect()
@@ -138,8 +166,6 @@ func (m *Mieta) Run(rootDir string) {
 			} else {
 				textView.ScrollTo(row+9, col)
 			}
-		case 'q':
-			app.Stop()
 		case 'H':
 			_, _, width, _ := listView.GetRect()
 			flex.ResizeItem(listView, width-2, 1)
@@ -150,7 +176,7 @@ func (m *Mieta) Run(rootDir string) {
 		return event
 	})
 
-	if err := app.SetRoot(flex, true).SetFocus(listView).Run(); err != nil {
+	if err := app.SetRoot(pages, true).SetFocus(listView).Run(); err != nil {
 		panic(err)
 	}
 }
