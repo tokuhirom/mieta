@@ -6,7 +6,9 @@ import (
 	"github.com/alecthomas/chroma/quick"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"image"
 	"image/jpeg"
+	"image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -221,15 +223,15 @@ func (m *MainView) walkDirectory(config *Config, listView *tview.List, path stri
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func (m *MainView) loadFileContent(config *Config, path string) {
 	fileExt := filepath.Ext(path)
-	if fileExt == ".jpg" || fileExt == ".jpeg" {
+	if fileExt == ".jpg" || fileExt == ".jpeg" || fileExt == ".png" {
 		log.Printf("Loading image: %s", path)
-		m.loadImage(path)
+		m.loadImage(path, fileExt)
 	} else {
 		m.loadTextFile(config, path)
 	}
 }
 
-func (m *MainView) loadImage(path string) {
+func (m *MainView) loadImage(path string, fileExt string) {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Printf("Failed to open image file: %v", err)
@@ -242,15 +244,26 @@ func (m *MainView) loadImage(path string) {
 		}
 	}(file)
 
-	image, err := jpeg.Decode(file)
-	if err != nil {
-		log.Printf("Failed to decode image: %v", err)
-		return
+	loadImage := func(image image.Image, err error) {
+		if err != nil {
+			log.Printf("Failed to decode image: %v", err)
+			return
+		}
+
+		log.Printf("Displaying image: %s", path)
+		m.PreviewPages.SwitchToPage("image")
+		m.PreviewImageView.SetImage(image)
 	}
 
-	log.Printf("Displaying image: %s", path)
-	m.PreviewPages.SwitchToPage("image")
-	m.PreviewImageView.SetImage(image)
+	if fileExt == ".jpg" || fileExt == ".jpeg" {
+		decoded, err := jpeg.Decode(file)
+		loadImage(decoded, err)
+	} else if fileExt == ".png" {
+		decoded, err := png.Decode(file)
+		loadImage(decoded, err)
+	} else {
+		log.Printf("Unsupported image format: %s", fileExt)
+	}
 }
 
 func (m *MainView) loadTextFile(config *Config, path string) {
