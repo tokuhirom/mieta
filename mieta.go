@@ -54,10 +54,11 @@ func run(rootDir string, config *mieta.Config) {
 		case tcell.KeyEscape:
 			log.Printf("Hide help page")
 			pages.HidePage("help")
-		}
-		switch event.Rune() {
-		case 'q':
-			app.Stop()
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'q':
+				app.Stop()
+			}
 		}
 		return event
 	})
