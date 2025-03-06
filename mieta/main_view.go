@@ -6,6 +6,8 @@ import (
 	"github.com/alecthomas/chroma/quick"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -223,7 +225,7 @@ func (m *MainView) walkDirectory(config *Config, listView *tview.List, path stri
 // loadFileContent loads and displays file content in the text view with syntax highlighting
 func (m *MainView) loadFileContent(config *Config, path string) {
 	fileExt := filepath.Ext(path)
-	if fileExt == ".jpg" || fileExt == ".jpeg" || fileExt == ".png" {
+	if fileExt == ".jpg" || fileExt == ".jpeg" || fileExt == ".png" || fileExt == ".svg" {
 		log.Printf("Loading image: %s", path)
 		m.loadImage(path, fileExt)
 	} else {
@@ -261,6 +263,17 @@ func (m *MainView) loadImage(path string, fileExt string) {
 	} else if fileExt == ".png" {
 		decoded, err := png.Decode(file)
 		loadImage(decoded, err)
+	} else if fileExt == ".svg" {
+		icon, err := oksvg.ReadIconStream(file)
+		if err != nil {
+			return
+		}
+		w, h := int(icon.ViewBox.W), int(icon.ViewBox.H)
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		scanner := rasterx.NewScannerGV(w, h, img, img.Bounds())
+		raster := rasterx.NewDasher(w, h, scanner)
+		icon.Draw(raster, 1.0)
+		loadImage(img, nil)
 	} else {
 		log.Printf("Unsupported image format: %s", fileExt)
 	}
