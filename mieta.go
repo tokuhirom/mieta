@@ -65,11 +65,17 @@ func (m *Mieta) Run(rootDir string) {
 
 	// Create list view
 	listView := tview.NewList()
+	listView.SetBorder(true)
 	listView.ShowSecondaryText(false)
+	listView.SetBorderColor(tcell.ColorDarkSlateGray)
+
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetWrap(true).
 		SetText(fmt.Sprintf("Select a file to view its content: %s", rootDir))
+	textView.SetBorder(true)
+	textView.SetBorderColor(tcell.ColorDarkSlateGray)
+	textView.SetBorderPadding(0, 0, 1, 1)
 	if m.MaxLines != nil {
 		textView.SetMaxLines(*m.MaxLines)
 	}
@@ -94,7 +100,7 @@ func (m *Mieta) Run(rootDir string) {
 	// Layout
 	flex := tview.NewFlex().
 		AddItem(listView, 30, 1, true).
-		AddItem(tview.NewBox(), 2, 0, false).
+		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(textView, 0, 2, false)
 
 	// キーバインド設定
@@ -209,7 +215,6 @@ func (m *Mieta) loadFileContent(textView *tview.TextView, path string) {
 		return
 	}
 
-	// 100KB よりも大きいファイルは重くなるのでハイライトしない
 	highlightLimit := m.HighlightLimit
 	if len(content) > highlightLimit {
 		log.Printf("File is too large to highlight: %s(%d bytes > %d bytes)", path,
