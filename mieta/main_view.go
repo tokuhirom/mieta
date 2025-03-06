@@ -25,6 +25,7 @@ const (
 )
 
 type MainView struct {
+	Application      *tview.Application
 	Mode             int
 	Config           *Config
 	Flex             *tview.Flex
@@ -35,7 +36,8 @@ type MainView struct {
 	// 検索モードに入る前に選択されていたアイテム
 	ItemBeforeFinding int
 	// 検索キーワード
-	FindingKeyword string
+	FindingKeyword     string
+	CurrentLoadingFile string
 }
 
 func NewMainView(rootDir string, config *Config, app *tview.Application, pages *tview.Pages, helpView *HelpView) *MainView {
@@ -47,8 +49,7 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 
 	previewTextView := tview.NewTextView().
 		SetDynamicColors(true).
-		SetWrap(true).
-		SetText(fmt.Sprintf("Select a file to view its content: %s", rootDir))
+		SetWrap(true)
 	previewTextView.SetBorder(true)
 	previewTextView.SetBorderColor(tcell.ColorDarkSlateGray)
 	previewTextView.SetBorderPadding(0, 0, 1, 1)
@@ -57,6 +58,8 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 	}
 
 	previewImageView := tview.NewImage()
+	previewImageView.SetBorder(true)
+	previewImageView.SetBorderColor(tcell.ColorDarkSlateGray)
 
 	previewPages := tview.NewPages()
 	previewPages.AddPage("text", previewTextView, true, true)
@@ -69,6 +72,7 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		AddItem(previewPages, 0, 2, false)
 
 	mainView := &MainView{
+		Application:      app,
 		Config:           config,
 		Flex:             flex,
 		ListView:         listView,
@@ -171,8 +175,13 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 			log.Println(err)
 			return
 		}
+
+		mainView.CurrentLoadingFile = path
 		if !fileInfo.IsDir() {
-			mainView.loadFileContent(config, path)
+			previewTextView.SetTitle(path)
+			previewTextView.SetText("[blue]Loading...")
+			previewPages.SwitchToPage("text")
+			go mainView.loadFileContent(config, path)
 		} else {
 			previewTextView.SetText("")
 		}
@@ -227,6 +236,32 @@ func (m *MainView) loadFileContent(config *Config, path string) {
 	}
 }
 
+func (m *MainView) ShowPreviewImage(path string, image *image.Image) {
+	m.Application.QueueUpdateDraw(func() {
+		if m.CurrentLoadingFile == path {
+			log.Printf("Displaying image: %s", path)
+			m.PreviewPages.SwitchToPage("image")
+			m.PreviewImageView.SetTitle(path)
+			m.PreviewImageView.SetImage(*image)
+		} else {
+			log.Printf("Ignoring image: %s", path)
+		}
+	})
+}
+
+func (m *MainView) ShowPreviewText(path string, text string) {
+	m.Application.QueueUpdateDraw(func() {
+		if m.CurrentLoadingFile == path {
+			log.Printf("Displaying text: %s", path)
+			m.PreviewTextView.SetTitle(path)
+			m.PreviewTextView.SetText(text)
+			m.PreviewPages.SwitchToPage("text")
+		} else {
+			log.Printf("Ignoring text: %s", path)
+		}
+	})
+}
+
 func (m *MainView) loadImage(path string, fileExt string) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -247,8 +282,7 @@ func (m *MainView) loadImage(path string, fileExt string) {
 		}
 
 		log.Printf("Displaying image: %s", path)
-		m.PreviewPages.SwitchToPage("image")
-		m.PreviewImageView.SetImage(image)
+		m.ShowPreviewImage(path, &image)
 	}
 
 	if fileExt == ".jpg" || fileExt == ".jpeg" {
@@ -280,16 +314,15 @@ func (m *MainView) loadTextFile(config *Config, path string) {
 	m.PreviewPages.SwitchToPage("text")
 
 	log.Printf("Loading %s", path)
-	m.PreviewTextView.SetText(fmt.Sprintf("Loading %s", path))
 	content, err := os.ReadFile(path)
 	if err != nil {
-		m.PreviewTextView.SetText(fmt.Sprintf("[red]Error loading file: %v", err))
+		m.ShowPreviewText(path, fmt.Sprintf("[red]Error loading file: %v", err))
 		return
 	}
 	log.Printf("Finished reading %s(%d bytes)", path, len(content))
 
 	if !utf8.Valid(content) {
-		m.PreviewTextView.SetText("[red]Binary")
+		m.ShowPreviewText(path, "[red]Binary")
 		return
 	}
 
@@ -297,7 +330,7 @@ func (m *MainView) loadTextFile(config *Config, path string) {
 	if len(content) > highlightLimit {
 		log.Printf("File is too large to highlight: %s(%d bytes > %d bytes)", path,
 			len(content), highlightLimit)
-		m.PreviewTextView.SetText(string(content))
+		m.ShowPreviewText(path, string(content))
 		return
 	}
 
@@ -306,11 +339,10 @@ func (m *MainView) loadTextFile(config *Config, path string) {
 
 	var highlighted bytes.Buffer
 	if err := quick.Highlight(&highlighted, string(content), fileExt, "terminal", config.ChromaStyle); err == nil {
-		m.PreviewTextView.SetText(tview.TranslateANSI(highlighted.String()))
+		m.ShowPreviewText(path, tview.TranslateANSI(highlighted.String()))
 	} else {
-		m.PreviewTextView.SetText(string(content))
+		m.ShowPreviewText(path, string(content))
 	}
-	log.Printf("Loaded %s", path)
 }
 
 func (m *MainView) findByKeyword() {
