@@ -53,9 +53,6 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 	previewTextView.SetBorder(true)
 	previewTextView.SetBorderColor(tcell.ColorDarkSlateGray)
 	previewTextView.SetBorderPadding(0, 0, 1, 1)
-	if config.MaxLines != nil {
-		previewTextView.SetMaxLines(*config.MaxLines)
-	}
 
 	previewImageView := tview.NewImage()
 	previewImageView.SetBorder(true)
@@ -146,11 +143,17 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 						x, y, width, height,
 					)
 					if previewTextView.GetOriginalLineCount() <= row+height {
+						log.Printf("Scroll to the end... open the next item")
 						index := listView.GetCurrentItem()
 						if index < listView.GetItemCount()-1 {
+							log.Printf("Select new item: %d to %d",
+								index, index+1)
 							listView.SetCurrentItem(index + 1)
+						} else {
+							log.Printf("Already at the end")
 						}
 					} else {
+						log.Printf("Already at the end")
 						previewTextView.ScrollTo(row+9, col)
 					}
 				case 'H':
