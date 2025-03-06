@@ -27,6 +27,7 @@ go install github.com/tokuhirom/mieta@latest
 -  `w`/`s`: Move up and down within the tree
 -  `j`/`k`: Scroll by page in the preview
 -  `shift+h`/`shift+l`: Adjust the width of the tree and preview panes
+-  `f`: Find files by name
 -  `q`: Exit the application
 
 ### Layout

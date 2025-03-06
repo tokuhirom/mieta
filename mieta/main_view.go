@@ -10,16 +10,27 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 )
 
+const (
+	ListMode = iota
+	FindingMode
+)
+
 type MainView struct {
+	Mode             int
 	Config           *Config
 	Flex             *tview.Flex
 	ListView         *tview.List
 	PreviewPages     *tview.Pages
 	PreviewImageView *tview.Image
 	PreviewTextView  *tview.TextView
+	// 検索モードに入る前に選択されていたアイテム
+	ItemBeforeFinding int
+	// 検索キーワード
+	FindingKeyword string
 }
 
 func NewMainView(rootDir string, config *Config, app *tview.Application, pages *tview.Pages, helpView *HelpView) *MainView {
@@ -52,54 +63,6 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
-	// キーバインド設定
-	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'w':
-			index := listView.GetCurrentItem()
-			if index > 0 {
-				listView.SetCurrentItem(index - 1)
-			}
-		case 's':
-			index := listView.GetCurrentItem()
-			if index < listView.GetItemCount()-1 {
-				listView.SetCurrentItem(index + 1)
-			}
-		case 'j':
-			row, col := previewTextView.GetScrollOffset()
-			previewTextView.ScrollTo(row+9, col)
-		case 'k':
-			row, col := previewTextView.GetScrollOffset()
-			previewTextView.ScrollTo(row-9, col)
-		case '?':
-			pages.ShowPage("help")
-			app.SetFocus(helpView.CloseButton)
-		case ' ':
-			row, col := previewTextView.GetScrollOffset()
-			x, y, width, height := previewTextView.GetRect()
-			log.Printf("row: %d, col: %d, lines: %d, height: %d, (%d,%d,%d,%d)",
-				row, col, previewTextView.GetOriginalLineCount(),
-				previewTextView.GetFieldHeight(),
-				x, y, width, height,
-			)
-			if previewTextView.GetOriginalLineCount() <= row+height {
-				index := listView.GetCurrentItem()
-				if index < listView.GetItemCount()-1 {
-					listView.SetCurrentItem(index + 1)
-				}
-			} else {
-				previewTextView.ScrollTo(row+9, col)
-			}
-		case 'H':
-			_, _, width, _ := listView.GetRect()
-			flex.ResizeItem(listView, width-2, 1)
-		case 'L':
-			_, _, width, _ := listView.GetRect()
-			flex.ResizeItem(listView, width+2, 1)
-		}
-		return event
-	})
-
 	mainView := &MainView{
 		Config:           config,
 		Flex:             flex,
@@ -108,6 +71,88 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		PreviewTextView:  previewTextView,
 		PreviewImageView: previewImageView,
 	}
+
+	// キーバインド設定
+	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch mainView.Mode {
+		case FindingMode:
+			log.Printf("FindingMode: %v", event.Key())
+			switch event.Key() {
+			case tcell.KeyEscape:
+				listView.SetTitle("")
+				mainView.Mode = ListMode
+				listView.SetCurrentItem(mainView.ItemBeforeFinding)
+				mainView.FindingKeyword = ""
+			case tcell.KeyEnter:
+				listView.SetTitle("")
+				mainView.Mode = ListMode
+				mainView.FindingKeyword = ""
+			case tcell.KeyDEL:
+				if len(mainView.FindingKeyword) > 0 {
+					mainView.FindingKeyword = mainView.FindingKeyword[:len(mainView.FindingKeyword)-1]
+					mainView.ListView.SetTitle(mainView.FindingKeyword)
+					mainView.findByKeyword()
+				}
+			case tcell.KeyRune:
+				mainView.FindingKeyword += string(event.Rune())
+				mainView.ListView.SetTitle(mainView.FindingKeyword)
+				mainView.findByKeyword()
+			}
+		case ListMode:
+			if event.Key() == tcell.KeyRune {
+				switch event.Rune() {
+				case 'f':
+					// goto find file mode
+					listView.SetTitle("🔎")
+					mainView.Mode = FindingMode
+					mainView.ItemBeforeFinding = listView.GetCurrentItem()
+					mainView.FindingKeyword = ""
+				case 'w':
+					index := listView.GetCurrentItem()
+					if index > 0 {
+						listView.SetCurrentItem(index - 1)
+					}
+				case 's':
+					index := listView.GetCurrentItem()
+					if index < listView.GetItemCount()-1 {
+						listView.SetCurrentItem(index + 1)
+					}
+				case 'j':
+					row, col := previewTextView.GetScrollOffset()
+					previewTextView.ScrollTo(row+9, col)
+				case 'k':
+					row, col := previewTextView.GetScrollOffset()
+					previewTextView.ScrollTo(row-9, col)
+				case '?':
+					pages.ShowPage("help")
+					app.SetFocus(helpView.CloseButton)
+				case ' ':
+					row, col := previewTextView.GetScrollOffset()
+					x, y, width, height := previewTextView.GetRect()
+					log.Printf("row: %d, col: %d, lines: %d, height: %d, (%d,%d,%d,%d)",
+						row, col, previewTextView.GetOriginalLineCount(),
+						previewTextView.GetFieldHeight(),
+						x, y, width, height,
+					)
+					if previewTextView.GetOriginalLineCount() <= row+height {
+						index := listView.GetCurrentItem()
+						if index < listView.GetItemCount()-1 {
+							listView.SetCurrentItem(index + 1)
+						}
+					} else {
+						previewTextView.ScrollTo(row+9, col)
+					}
+				case 'H':
+					_, _, width, _ := listView.GetRect()
+					flex.ResizeItem(listView, width-2, 1)
+				case 'L':
+					_, _, width, _ := listView.GetRect()
+					flex.ResizeItem(listView, width+2, 1)
+				}
+			}
+		}
+		return event
+	})
 
 	// Load directory items
 	go mainView.loadDirectory(config, listView, rootDir, previewTextView, "")
@@ -241,4 +286,57 @@ func (m *MainView) loadTextFile(config *Config, path string) {
 		m.PreviewTextView.SetText(string(content))
 	}
 	log.Printf("Loaded %s", path)
+}
+
+func (m *MainView) findByKeyword() {
+	// mainView.FindingKeyword にマッチする要素を探して選択する｡
+
+	// マッチの方法は､全ての文字が並び順のとおりに含まれていれば良く､
+	// 途中で文字が飛んでいても良い｡
+	// 例えば "abc" は "afbkc" にもマッチするが "bac" にはマッチしない｡
+
+	// まずは ItemBeforeFinding よりも後を探す｡その後に先頭から探す｡
+	// 見つからなかったら ItemBeforeFinding の位置に戻す｡
+
+	keyword := strings.ToLower(m.FindingKeyword)
+	log.Printf("Finding: %s", keyword)
+	if keyword == "" {
+		return
+	}
+
+	// Function to check if a string contains all characters of the keyword in order
+	matches := func(item, keyword string) bool {
+		item = strings.ToLower(item)
+		j := 0
+		for i := 0; i < len(item) && j < len(keyword); i++ {
+			if item[i] == keyword[j] {
+				j++
+			}
+		}
+		return j == len(keyword)
+	}
+
+	// Search from the current item to the end
+	for i := m.ItemBeforeFinding + 1; i < m.ListView.GetItemCount(); i++ {
+		mainText, _ := m.ListView.GetItemText(i)
+		if matches(mainText, keyword) {
+			log.Printf("Found: %s", mainText)
+			m.ListView.SetCurrentItem(i)
+			return
+		}
+	}
+
+	// Search from the start to the current item
+	for i := 0; i <= m.ItemBeforeFinding; i++ {
+		mainText, _ := m.ListView.GetItemText(i)
+		if matches(mainText, keyword) {
+			log.Printf("Found: %s", mainText)
+			m.ListView.SetCurrentItem(i)
+			return
+		}
+	}
+
+	// If no match is found, revert to the original item
+	log.Printf("Not Found: %s", keyword)
+	m.ListView.SetCurrentItem(m.ItemBeforeFinding)
 }

@@ -10,6 +10,7 @@ const HelpMessage = `Help
  w/s: Move up and down within the tree
  j/k: Scroll by page in the preview
  shift+h/shift+l: Adjust the width of the tree and preview panes
+ f: Find a file
  q: Exit the application
 `
 
