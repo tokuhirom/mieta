@@ -5,7 +5,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-const HELP_MESSAGE = `Help
+const HelpMessage = `Help
 
  w/s: Move up and down within the tree
  j/k: Scroll by page in the preview
@@ -26,7 +26,7 @@ func NewHelpView(pages *tview.Pages) *HelpView {
 	height := 10
 
 	textView := tview.NewTextView().
-		SetText(HELP_MESSAGE)
+		SetText(HelpMessage)
 	textView.SetBorder(true)
 	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
