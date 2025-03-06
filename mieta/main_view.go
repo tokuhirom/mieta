@@ -208,14 +208,7 @@ func (m *MainView) walkDirectory(config *Config, listView *tview.List, path stri
 			displayName = fmt.Sprintf("%s- %s", prefix, file.Name())
 		}
 		listView.AddItem(displayName, filePath, 0, func() {
-			fileInfo, err := os.Stat(filePath)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			if !fileInfo.IsDir() {
-				m.loadFileContent(config, filePath)
-			}
+			// on selected... do nothing.
 		})
 		if file.IsDir() {
 			m.walkDirectory(config, listView, filePath, textView, prefix+"  ")
