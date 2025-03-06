@@ -13,9 +13,12 @@ import (
 )
 
 type MainView struct {
-	Config   *Config
-	Flex     *tview.Flex
-	ListView *tview.List
+	Config           *Config
+	Flex             *tview.Flex
+	ListView         *tview.List
+	PreviewPages     *tview.Pages
+	PreviewImageView *tview.Image
+	PreviewTextView  *tview.TextView
 }
 
 func NewMainView(rootDir string, config *Config, app *tview.Application, pages *tview.Pages, helpView *HelpView) *MainView {
@@ -25,39 +28,28 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 	listView.ShowSecondaryText(false)
 	listView.SetBorderColor(tcell.ColorDarkSlateGray)
 
-	textView := tview.NewTextView().
+	previewTextView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetWrap(true).
 		SetText(fmt.Sprintf("Select a file to view its content: %s", rootDir))
-	textView.SetBorder(true)
-	textView.SetBorderColor(tcell.ColorDarkSlateGray)
-	textView.SetBorderPadding(0, 0, 1, 1)
+	previewTextView.SetBorder(true)
+	previewTextView.SetBorderColor(tcell.ColorDarkSlateGray)
+	previewTextView.SetBorderPadding(0, 0, 1, 1)
 	if config.MaxLines != nil {
-		textView.SetMaxLines(*config.MaxLines)
+		previewTextView.SetMaxLines(*config.MaxLines)
 	}
 
-	// Load directory items
-	go loadDirectory(config, listView, rootDir, textView, "")
+	previewImageView := tview.NewImage()
 
-	listView.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		path := secondaryText
-		fileInfo, err := os.Stat(path)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if !fileInfo.IsDir() {
-			loadFileContent(config, textView, path)
-		} else {
-			textView.SetText("")
-		}
-	})
+	previewPages := tview.NewPages()
+	previewPages.AddPage("text", previewTextView, true, true)
+	previewPages.AddPage("image", previewImageView, true, false)
 
 	// Layout
 	flex := tview.NewFlex().
 		AddItem(listView, 30, 1, true).
 		AddItem(tview.NewBox(), 1, 0, false).
-		AddItem(textView, 0, 2, false)
+		AddItem(previewTextView, 0, 2, false)
 
 	// キーバインド設定
 	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -73,29 +65,29 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 				listView.SetCurrentItem(index + 1)
 			}
 		case 'j':
-			row, col := textView.GetScrollOffset()
-			textView.ScrollTo(row+9, col)
+			row, col := previewTextView.GetScrollOffset()
+			previewTextView.ScrollTo(row+9, col)
 		case 'k':
-			row, col := textView.GetScrollOffset()
-			textView.ScrollTo(row-9, col)
+			row, col := previewTextView.GetScrollOffset()
+			previewTextView.ScrollTo(row-9, col)
 		case '?':
 			pages.ShowPage("help")
 			app.SetFocus(helpView.CloseButton)
 		case ' ':
-			row, col := textView.GetScrollOffset()
-			x, y, width, height := textView.GetRect()
+			row, col := previewTextView.GetScrollOffset()
+			x, y, width, height := previewTextView.GetRect()
 			log.Printf("row: %d, col: %d, lines: %d, height: %d, (%d,%d,%d,%d)",
-				row, col, textView.GetOriginalLineCount(),
-				textView.GetFieldHeight(),
+				row, col, previewTextView.GetOriginalLineCount(),
+				previewTextView.GetFieldHeight(),
 				x, y, width, height,
 			)
-			if textView.GetOriginalLineCount() <= row+height {
+			if previewTextView.GetOriginalLineCount() <= row+height {
 				index := listView.GetCurrentItem()
 				if index < listView.GetItemCount()-1 {
 					listView.SetCurrentItem(index + 1)
 				}
 			} else {
-				textView.ScrollTo(row+9, col)
+				previewTextView.ScrollTo(row+9, col)
 			}
 		case 'H':
 			_, _, width, _ := listView.GetRect()
@@ -107,21 +99,43 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		return event
 	})
 
-	return &MainView{
-		Config:   config,
-		Flex:     flex,
-		ListView: listView,
+	mainView := &MainView{
+		Config:           config,
+		Flex:             flex,
+		ListView:         listView,
+		PreviewPages:     previewPages,
+		PreviewTextView:  previewTextView,
+		PreviewImageView: previewImageView,
 	}
+
+	// Load directory items
+	go mainView.loadDirectory(config, listView, rootDir, previewTextView, "")
+
+	listView.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		path := secondaryText
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if !fileInfo.IsDir() {
+			mainView.loadFileContent(config, path)
+		} else {
+			previewTextView.SetText("")
+		}
+	})
+
+	return mainView
 }
 
 // loadDirectory loads directory content into a list view with tree-like formatting
-func loadDirectory(config *Config, listView *tview.List, path string, textView *tview.TextView, prefix string) {
+func (m *MainView) loadDirectory(config *Config, listView *tview.List, path string, textView *tview.TextView, prefix string) {
 	listView.Clear()
 
-	walkDirectory(config, listView, path, textView, prefix)
+	m.walkDirectory(config, listView, path, textView, prefix)
 }
 
-func walkDirectory(config *Config, listView *tview.List, path string, textView *tview.TextView, prefix string) {
+func (m *MainView) walkDirectory(config *Config, listView *tview.List, path string, textView *tview.TextView, prefix string) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		log.Println(err)
@@ -146,31 +160,29 @@ func walkDirectory(config *Config, listView *tview.List, path string, textView *
 				log.Println(err)
 				return
 			}
-			if fileInfo.IsDir() {
-				//loadDirectory(listView, filePath, textView, prefix+"  ")
-			} else {
-				loadFileContent(config, textView, filePath)
+			if !fileInfo.IsDir() {
+				m.loadFileContent(config, filePath)
 			}
 		})
 		if file.IsDir() {
-			walkDirectory(config, listView, filePath, textView, prefix+"  ")
+			m.walkDirectory(config, listView, filePath, textView, prefix+"  ")
 		}
 	}
 }
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
-func loadFileContent(config *Config, textView *tview.TextView, path string) {
+func (m *MainView) loadFileContent(config *Config, path string) {
 	log.Printf("Loading %s", path)
-	textView.SetText(fmt.Sprintf("Loading %s", path))
+	m.PreviewTextView.SetText(fmt.Sprintf("Loading %s", path))
 	content, err := os.ReadFile(path)
 	if err != nil {
-		textView.SetText(fmt.Sprintf("[red]Error loading file: %v", err))
+		m.PreviewTextView.SetText(fmt.Sprintf("[red]Error loading file: %v", err))
 		return
 	}
 	log.Printf("Finished reading %s(%d bytes)", path, len(content))
 
 	if !utf8.Valid(content) {
-		textView.SetText("[red]Binary")
+		m.PreviewTextView.SetText("[red]Binary")
 		return
 	}
 
@@ -178,7 +190,7 @@ func loadFileContent(config *Config, textView *tview.TextView, path string) {
 	if len(content) > highlightLimit {
 		log.Printf("File is too large to highlight: %s(%d bytes > %d bytes)", path,
 			len(content), highlightLimit)
-		textView.SetText(string(content))
+		m.PreviewTextView.SetText(string(content))
 		return
 	}
 
@@ -187,9 +199,9 @@ func loadFileContent(config *Config, textView *tview.TextView, path string) {
 
 	var highlighted bytes.Buffer
 	if err := quick.Highlight(&highlighted, string(content), fileExt, "terminal", config.ChromaStyle); err == nil {
-		textView.SetText(tview.TranslateANSI(highlighted.String()))
+		m.PreviewTextView.SetText(tview.TranslateANSI(highlighted.String()))
 	} else {
-		textView.SetText(string(content))
+		m.PreviewTextView.SetText(string(content))
 	}
 	log.Printf("Loaded %s", path)
 }
