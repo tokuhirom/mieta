@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ListMode = iota
+	TreeMode = iota
 	FindingMode
 )
 
@@ -29,23 +29,36 @@ type MainView struct {
 	Mode             int
 	Config           *Config
 	Flex             *tview.Flex
-	ListView         *tview.List
+	TreeView         *tview.TreeView
 	PreviewPages     *tview.Pages
 	PreviewImageView *tview.Image
 	PreviewTextView  *tview.TextView
 	// 検索モードに入る前に選択されていたアイテム
-	ItemBeforeFinding int
+	NodeBeforeFinding *tview.TreeNode
 	// 検索キーワード
 	FindingKeyword     string
 	CurrentLoadingFile string
+	RootDir            string
+}
+
+type FileNode struct {
+	Path  string
+	IsDir bool
 }
 
 func NewMainView(rootDir string, config *Config, app *tview.Application, pages *tview.Pages, helpView *HelpView) *MainView {
-	// Create list view
-	listView := tview.NewList()
-	listView.SetBorder(true)
-	listView.ShowSecondaryText(false)
-	listView.SetBorderColor(tcell.ColorDarkSlateGray)
+	// Create tree view
+	root := tview.NewTreeNode(filepath.Base(rootDir))
+	root.SetReference(&FileNode{
+		Path:  rootDir,
+		IsDir: true,
+	})
+
+	treeView := tview.NewTreeView().
+		SetRoot(root).
+		SetCurrentNode(root)
+	treeView.SetBorder(true)
+	treeView.SetBorderColor(tcell.ColorDarkSlateGray)
 
 	previewTextView := tview.NewTextView().
 		SetDynamicColors(true).
@@ -64,7 +77,7 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 
 	// Layout
 	flex := tview.NewFlex().
-		AddItem(listView, 30, 1, true).
+		AddItem(treeView, 30, 1, true).
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
@@ -72,57 +85,48 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		Application:      app,
 		Config:           config,
 		Flex:             flex,
-		ListView:         listView,
+		TreeView:         treeView,
 		PreviewPages:     previewPages,
 		PreviewTextView:  previewTextView,
 		PreviewImageView: previewImageView,
+		RootDir:          rootDir,
 	}
 
 	// キーバインド設定
-	listView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	treeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch mainView.Mode {
 		case FindingMode:
 			log.Printf("FindingMode: %v", event.Key())
 			switch event.Key() {
 			case tcell.KeyEscape:
-				listView.SetTitle("")
-				mainView.Mode = ListMode
-				listView.SetCurrentItem(mainView.ItemBeforeFinding)
+				treeView.SetTitle("")
+				mainView.Mode = TreeMode
+				treeView.SetCurrentNode(mainView.NodeBeforeFinding)
 				mainView.FindingKeyword = ""
 			case tcell.KeyEnter:
-				listView.SetTitle("")
-				mainView.Mode = ListMode
+				treeView.SetTitle("")
+				mainView.Mode = TreeMode
 				mainView.FindingKeyword = ""
 			case tcell.KeyDEL:
 				if len(mainView.FindingKeyword) > 0 {
 					mainView.FindingKeyword = mainView.FindingKeyword[:len(mainView.FindingKeyword)-1]
-					mainView.ListView.SetTitle(mainView.FindingKeyword)
+					mainView.TreeView.SetTitle(mainView.FindingKeyword)
 					mainView.findByKeyword()
 				}
 			case tcell.KeyRune:
 				mainView.FindingKeyword += string(event.Rune())
-				mainView.ListView.SetTitle(mainView.FindingKeyword)
+				mainView.TreeView.SetTitle(mainView.FindingKeyword)
 				mainView.findByKeyword()
 			}
-		case ListMode:
+		case TreeMode:
 			if event.Key() == tcell.KeyRune {
 				switch event.Rune() {
 				case 'f':
 					// goto find file mode
-					listView.SetTitle("🔎")
+					treeView.SetTitle("🔎")
 					mainView.Mode = FindingMode
-					mainView.ItemBeforeFinding = listView.GetCurrentItem()
+					mainView.NodeBeforeFinding = treeView.GetCurrentNode()
 					mainView.FindingKeyword = ""
-				case 'w':
-					index := listView.GetCurrentItem()
-					if index > 0 {
-						listView.SetCurrentItem(index - 1)
-					}
-				case 's':
-					index := listView.GetCurrentItem()
-					if index < listView.GetItemCount()-1 {
-						listView.SetCurrentItem(index + 1)
-					}
 				case 'j':
 					row, col := previewTextView.GetScrollOffset()
 					previewTextView.ScrollTo(row+9, col)
@@ -134,98 +138,101 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 				case '?':
 					pages.ShowPage("help")
 					app.SetFocus(helpView.CloseButton)
+				case 'w':
+					treeView.Move(-1)
+				case 's':
+					treeView.Move(1)
+				case 'a':
+					treeView.GetCurrentNode().Collapse()
+				case 'd':
+					mainView.expand()
 				case ' ':
 					row, col := previewTextView.GetScrollOffset()
-					x, y, width, height := previewTextView.GetRect()
-					log.Printf("row: %d, col: %d, lines: %d, height: %d, (%d,%d,%d,%d)",
-						row, col, previewTextView.GetOriginalLineCount(),
-						previewTextView.GetFieldHeight(),
-						x, y, width, height,
-					)
+					_, _, _, height := previewTextView.GetRect()
 					if previewTextView.GetOriginalLineCount() <= row+height {
-						log.Printf("Scroll to the end... open the next item")
-						index := listView.GetCurrentItem()
-						if index < listView.GetItemCount()-1 {
-							log.Printf("Select new item: %d to %d",
-								index, index+1)
-							listView.SetCurrentItem(index + 1)
-						} else {
-							log.Printf("Already at the end")
-						}
+						// Try to find the next node
+						// TODO: This is not working correctly
+						//currentNode := treeView.GetCurrentNode()
+						//if currentNode.GetNextSibling() != nil {
+						//	treeView.SetCurrentNode(currentNode.GetNextSibling())
+						//} else {
+						//	previewTextView.ScrollTo(row+9, col)
+						//}
 					} else {
-						log.Printf("Already at the end")
 						previewTextView.ScrollTo(row+9, col)
 					}
 				case 'H':
-					_, _, width, _ := listView.GetRect()
-					flex.ResizeItem(listView, width-2, 1)
+					_, _, width, _ := treeView.GetRect()
+					flex.ResizeItem(treeView, width-2, 1)
 				case 'L':
-					_, _, width, _ := listView.GetRect()
-					flex.ResizeItem(listView, width+2, 1)
+					_, _, width, _ := treeView.GetRect()
+					flex.ResizeItem(treeView, width+2, 1)
 				}
 			}
 		}
 		return event
 	})
 
-	// Load directory items
-	go mainView.loadDirectory(config, listView, rootDir, previewTextView, "")
+	treeView.SetChangedFunc(func(node *tview.TreeNode) {
+		log.Printf("ChangedFunc: %v", node.GetText())
 
-	listView.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		path := secondaryText
-		fileInfo, err := os.Stat(path)
-		if err != nil {
-			log.Println(err)
+		reference := node.GetReference()
+		if reference == nil {
 			return
 		}
 
-		mainView.CurrentLoadingFile = path
-		if !fileInfo.IsDir() {
+		fileNode := reference.(*FileNode)
+		path := fileNode.Path
+
+		if !fileNode.IsDir {
+			// Load file content
+			mainView.CurrentLoadingFile = path
 			previewTextView.SetTitle(path)
 			previewTextView.SetText("[blue]Loading...")
 			previewPages.SwitchToPage("text")
 			go mainView.loadFileContent(config, path)
-		} else {
-			previewTextView.SetText("")
 		}
 	})
+
+	// Initial loading of the root directory
+	if err := mainView.loadDirectoryContents(root, rootDir); err != nil {
+		log.Printf("Error loading root directory: %v", err)
+	}
 
 	return mainView
 }
 
-// loadDirectory loads directory content into a list view with tree-like formatting
-func (m *MainView) loadDirectory(config *Config, listView *tview.List, path string, textView *tview.TextView, prefix string) {
-	listView.Clear()
-
-	m.walkDirectory(config, listView, path, textView, prefix)
-}
-
-func (m *MainView) walkDirectory(config *Config, listView *tview.List, path string, textView *tview.TextView, prefix string) {
+// loadDirectoryContents loads the contents of a directory into a tree node
+func (m *MainView) loadDirectoryContents(node *tview.TreeNode, path string) error {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 
+	// Sort files and directories
 	for _, file := range files {
-		if file.Name() == ".git" {
-			continue
-		}
 		filePath := filepath.Join(path, file.Name())
+		isDir := file.IsDir()
 
-		var displayName string
-		if file.IsDir() {
-			displayName = fmt.Sprintf("%s+ %s", prefix, file.Name())
+		// Create a new node
+		var childNode *tview.TreeNode
+		if isDir {
+			childNode = tview.NewTreeNode("📁" + file.Name() + "/")
 		} else {
-			displayName = fmt.Sprintf("%s- %s", prefix, file.Name())
+			childNode = tview.NewTreeNode("📄" + file.Name())
 		}
-		listView.AddItem(displayName, filePath, 0, func() {
-			// on selected... do nothing.
+
+		// Set reference data
+		childNode.SetReference(&FileNode{
+			Path:  filePath,
+			IsDir: isDir,
 		})
-		if file.IsDir() {
-			m.walkDirectory(config, listView, filePath, textView, prefix+"  ")
-		}
+
+		// Add to parent
+		node.AddChild(childNode)
 	}
+
+	return nil
 }
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
@@ -349,15 +356,6 @@ func (m *MainView) loadTextFile(config *Config, path string) {
 }
 
 func (m *MainView) findByKeyword() {
-	// mainView.FindingKeyword にマッチする要素を探して選択する｡
-
-	// マッチの方法は､全ての文字が並び順のとおりに含まれていれば良く､
-	// 途中で文字が飛んでいても良い｡
-	// 例えば "abc" は "afbkc" にもマッチするが "bac" にはマッチしない｡
-
-	// まずは ItemBeforeFinding よりも後を探す｡その後に先頭から探す｡
-	// 見つからなかったら ItemBeforeFinding の位置に戻す｡
-
 	keyword := strings.ToLower(m.FindingKeyword)
 	log.Printf("Finding: %s", keyword)
 	if keyword == "" {
@@ -365,38 +363,64 @@ func (m *MainView) findByKeyword() {
 	}
 
 	// Function to check if a string contains all characters of the keyword in order
-	matches := func(item, keyword string) bool {
-		item = strings.ToLower(item)
+	matches := func(text, keyword string) bool {
+		text = strings.ToLower(text)
 		j := 0
-		for i := 0; i < len(item) && j < len(keyword); i++ {
-			if item[i] == keyword[j] {
+		for i := 0; i < len(text) && j < len(keyword); i++ {
+			if text[i] == keyword[j] {
 				j++
 			}
 		}
 		return j == len(keyword)
 	}
 
-	// Search from the current item to the end
-	for i := m.ItemBeforeFinding + 1; i < m.ListView.GetItemCount(); i++ {
-		mainText, _ := m.ListView.GetItemText(i)
-		if matches(mainText, keyword) {
-			log.Printf("Found: %s", mainText)
-			m.ListView.SetCurrentItem(i)
-			return
+	// Function to search nodes recursively
+	var searchNode func(node *tview.TreeNode) *tview.TreeNode
+	searchNode = func(node *tview.TreeNode) *tview.TreeNode {
+		// Check current node
+		text := node.GetText()
+		if matches(text, keyword) {
+			return node
 		}
+
+		// Check children
+		for _, child := range node.GetChildren() {
+			if found := searchNode(child); found != nil {
+				return found
+			}
+		}
+
+		return nil
 	}
 
-	// Search from the start to the current item
-	for i := 0; i <= m.ItemBeforeFinding; i++ {
-		mainText, _ := m.ListView.GetItemText(i)
-		if matches(mainText, keyword) {
-			log.Printf("Found: %s", mainText)
-			m.ListView.SetCurrentItem(i)
-			return
-		}
+	// Start search from root
+	if found := searchNode(m.TreeView.GetRoot()); found != nil {
+		m.TreeView.SetCurrentNode(found)
+	} else {
+		// If no match found, revert to original node
+		log.Printf("Not Found: %s", keyword)
+		m.TreeView.SetCurrentNode(m.NodeBeforeFinding)
+	}
+}
+
+func (m *MainView) expand() {
+	node := m.TreeView.GetCurrentNode()
+	reference := node.GetReference()
+	if reference == nil {
+		return
 	}
 
-	// If no match is found, revert to the original item
-	log.Printf("Not Found: %s", keyword)
-	m.ListView.SetCurrentItem(m.ItemBeforeFinding)
+	fileNode := reference.(*FileNode)
+	path := fileNode.Path
+
+	if !fileNode.IsDir {
+		return
+	}
+
+	node.ClearChildren()
+	node.Expand()
+
+	if err := m.loadDirectoryContents(node, path); err != nil {
+		log.Printf("Error loading directory: %v", err)
+	}
 }
