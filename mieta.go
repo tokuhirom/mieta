@@ -58,7 +58,7 @@ func run(rootDir string, config *mieta.Config) {
 		return event
 	})
 
-	if err := app.SetRoot(pages, true).SetFocus(mainView.ListView).Run(); err != nil {
+	if err := app.SetRoot(pages, true).SetFocus(mainView.TreeView).Run(); err != nil {
 		panic(err)
 	}
 }
