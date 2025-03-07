@@ -170,7 +170,7 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 				}
 			}
 		}
-		return event
+		return nil
 	})
 
 	treeView.SetChangedFunc(func(node *tview.TreeNode) {
