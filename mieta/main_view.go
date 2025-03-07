@@ -433,13 +433,15 @@ func (m *MainView) NavigateUp() {
 	}
 
 	fileNode := reference.(*FileNode)
-	if fileNode.IsDir {
+	if fileNode.IsDir && node.IsExpanded() {
+		// The current node is a directory and expanded, ust collapse it.
 		node.Collapse()
-	} else {
-		// move to the parent node
-		path := m.TreeView.GetPath(m.TreeView.GetCurrentNode())
-		if len(path) > 2 {
-			m.TreeView.SetCurrentNode(path[len(path)-2])
-		}
+		return
+	}
+
+	// move to the parent node
+	path := m.TreeView.GetPath(m.TreeView.GetCurrentNode())
+	if len(path) > 2 {
+		m.TreeView.SetCurrentNode(path[len(path)-2])
 	}
 }
