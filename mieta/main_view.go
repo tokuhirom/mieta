@@ -143,7 +143,7 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 				case 's':
 					treeView.Move(1)
 				case 'a':
-					treeView.GetCurrentNode().Collapse()
+					mainView.NavigateUp()
 				case 'd':
 					mainView.expand()
 				case ' ':
@@ -422,5 +422,24 @@ func (m *MainView) expand() {
 
 	if err := m.loadDirectoryContents(node, path); err != nil {
 		log.Printf("Error loading directory: %v", err)
+	}
+}
+
+func (m *MainView) NavigateUp() {
+	node := m.TreeView.GetCurrentNode()
+	reference := node.GetReference()
+	if reference == nil {
+		return
+	}
+
+	fileNode := reference.(*FileNode)
+	if fileNode.IsDir {
+		node.Collapse()
+	} else {
+		// move to the parent node
+		path := m.TreeView.GetPath(m.TreeView.GetCurrentNode())
+		if len(path) > 2 {
+			m.TreeView.SetCurrentNode(path[len(path)-2])
+		}
 	}
 }
