@@ -142,6 +142,8 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 					treeView.Move(-1)
 				case 's':
 					treeView.Move(1)
+				case 'S':
+					pages.ShowPage("search")
 				case 'a':
 					mainView.NavigateUp()
 				case 'd':

@@ -48,6 +48,8 @@ func run(rootDir string, config *mieta.Config) {
 	mainView := mieta.NewMainView(rootDir, config, app, pages, helpView)
 	pages.AddPage("background", mainView.Flex, true, true)
 	pages.AddPage("help", helpView.Flex, true, false)
+	searchView := mieta.NewSearchView(app, config, mainView, pages, rootDir)
+	pages.AddPage("search", searchView.Flex, true, false)
 
 	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {

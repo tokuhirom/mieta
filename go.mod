@@ -3,6 +3,7 @@ module github.com/tokuhirom/mieta
 go 1.24.0
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/alecthomas/chroma v0.10.0
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
