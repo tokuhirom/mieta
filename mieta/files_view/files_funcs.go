@@ -101,7 +101,22 @@ func FilesIncreaseTreeWidth(view *FilesView) {
 
 // FilesEnterFindMode は検索モードに入ります
 func FilesEnterFindMode(view *FilesView) {
-	view.LeftPane.AddItem(view.SearchBox, 1, 0, true)
-	view.Application.SetFocus(view.SearchBox)
+	view.FileNameSearchBox.SetText("")
+	view.LeftPane.AddItem(view.FileNameSearchBox, 1, 0, true)
+	view.Application.SetFocus(view.FileNameSearchBox)
 	view.NodeBeforeFinding = view.TreeView.GetCurrentNode()
+}
+
+func FilesInlineSearch(view *FilesView) {
+	view.InlineSearchBox.SetText("")
+	view.PreviewTextWrapper.AddItem(view.InlineSearchBox, 1, 0, true)
+	view.Application.SetFocus(view.InlineSearchBox)
+}
+
+func FilesFindNext(view *FilesView) {
+	view.findNext()
+}
+
+func FilesFindPrev(view *FilesView) {
+	view.findPrev()
 }
