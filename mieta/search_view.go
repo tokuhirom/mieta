@@ -2,7 +2,9 @@ package mieta
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"github.com/alecthomas/chroma/quick"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/tokuhirom/mieta/mieta/search"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // SearchResult represents a search result or error message
@@ -471,42 +474,89 @@ func (s *SearchView) loadFileContent(path string, lineNumber int) {
 	s.ContentView.Clear()
 	s.ContentView.SetTitle(path)
 
-	file, err := os.Open(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		s.ContentView.SetText(fmt.Sprintf("[red]Error opening file: %v", err))
 		return
 	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			log.Printf("Error closing file: %v", err)
-		}
-	}(file)
 
-	// Read file content
-	content, err := io.ReadAll(file)
-	if err != nil {
-		s.ContentView.SetText(fmt.Sprintf("[red]Error reading file: %v", err))
+	// Check if content is valid UTF-8
+	if !utf8.Valid(content) {
+		s.ContentView.SetText("[red]Binary file")
 		return
 	}
 
-	lines := strings.Split(string(content), "\n")
+	// Check file size limit for highlighting
+	highlightLimit := s.Config.HighlightLimit
+	if len(content) > highlightLimit {
+		log.Printf("File is too large to highlight: %s(%d bytes > %d bytes)", path,
+			len(content), highlightLimit)
 
-	// Display file content with highlighted line
-	var builder strings.Builder
-	for i, line := range lines {
-		lineNum := i + 1
-		if lineNum == lineNumber {
-			builder.WriteString(fmt.Sprintf("[yellow]%4d: %s[white]\n", lineNum, line))
-		} else {
-			builder.WriteString(fmt.Sprintf("%4d: %s\n", lineNum, line))
+		// Display without highlighting but with line numbers
+		lines := strings.Split(string(content), "\n")
+		var builder strings.Builder
+		for i, line := range lines {
+			lineNum := i + 1
+			if lineNum == lineNumber {
+				builder.WriteString(fmt.Sprintf("[yellow]%4d: %s[white]\n", lineNum, line))
+			} else {
+				builder.WriteString(fmt.Sprintf("%4d: %s\n", lineNum, line))
+			}
 		}
+		s.ContentView.SetText(builder.String())
+
+		// Scroll to the matched line
+		if lineNumber > 0 && lineNumber <= len(lines) {
+			_, _, _, height := s.ContentView.GetRect()
+			targetLine := lineNumber - (height / 2)
+			if targetLine < 0 {
+				targetLine = 0
+			}
+			s.ContentView.ScrollTo(targetLine, 0)
+		}
+		return
 	}
 
-	s.ContentView.SetText(builder.String())
+	// Get file extension for syntax detection
+	fileExt := filepath.Ext(path)
+
+	// Apply syntax highlighting
+	var highlighted bytes.Buffer
+	if err := quick.Highlight(&highlighted, string(content), fileExt, "terminal", s.Config.ChromaStyle); err == nil {
+		// Convert ANSI escape sequences to tview color tags
+		highlightedText := tview.TranslateANSI(highlighted.String())
+
+		// Add line numbers and highlight the matched line
+		lines := strings.Split(highlightedText, "\n")
+		var builder strings.Builder
+		for i, line := range lines {
+			lineNum := i + 1
+			if lineNum == lineNumber {
+				builder.WriteString(fmt.Sprintf("[yellow]%4d: %s[white]\n", lineNum, line))
+			} else {
+				builder.WriteString(fmt.Sprintf("%4d: %s\n", lineNum, line))
+			}
+		}
+
+		s.ContentView.SetText(builder.String())
+	} else {
+		// Fallback to plain text if highlighting fails
+		log.Printf("Syntax highlighting failed: %v", err)
+		lines := strings.Split(string(content), "\n")
+		var builder strings.Builder
+		for i, line := range lines {
+			lineNum := i + 1
+			if lineNum == lineNumber {
+				builder.WriteString(fmt.Sprintf("[yellow]%4d: %s[white]\n", lineNum, line))
+			} else {
+				builder.WriteString(fmt.Sprintf("%4d: %s\n", lineNum, line))
+			}
+		}
+		s.ContentView.SetText(builder.String())
+	}
 
 	// Scroll to the matched line
-	if lineNumber > 0 && lineNumber <= len(lines) {
+	if lineNumber > 0 {
 		// Calculate position to center the matched line
 		_, _, _, height := s.ContentView.GetRect()
 		targetLine := lineNumber - (height / 2)
