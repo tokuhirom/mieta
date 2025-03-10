@@ -1,4 +1,4 @@
-package mieta
+package config
 
 import (
 	"github.com/BurntSushi/toml"
@@ -25,6 +25,11 @@ type Config struct {
 
 	// 検索関連の設定
 	Search SearchConfig `toml:"search"`
+
+	// Keymaps
+	FilesKeyMap  map[string]string `toml:"keymap.files"`
+	HelpKeyMap   map[string]string `toml:"keymap.help"`
+	SearchKeyMap map[string]string `toml:"keymap.search"`
 }
 
 // LoadConfig は設定ファイルを読み込みます

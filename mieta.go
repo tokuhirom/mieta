@@ -4,7 +4,10 @@ import (
 	"github.com/gdamore/tcell/v2"
 	_ "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/tokuhirom/mieta/mieta"
+	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/files_view"
+	"github.com/tokuhirom/mieta/mieta/help_view"
+	"github.com/tokuhirom/mieta/mieta/search_view"
 	"io"
 	"log"
 	"os"
@@ -36,19 +39,19 @@ func main() {
 		rootDir, _ = os.Getwd()
 	}
 
-	config := mieta.LoadConfig()
+	config := config.LoadConfig()
 	run(rootDir, config)
 }
 
-func run(rootDir string, config *mieta.Config) {
+func run(rootDir string, config *config.Config) {
 	app := tview.NewApplication()
 
 	pages := tview.NewPages()
-	helpView := mieta.NewHelpView(pages)
-	mainView := mieta.NewMainView(rootDir, config, app, pages, helpView)
-	pages.AddPage("background", mainView.Flex, true, true)
+	helpView := help_view.NewHelpView(pages, config)
+	mainView := files_view.NewFilesView(rootDir, config, app, pages)
+	pages.AddPage("files", mainView.Flex, true, true)
 	pages.AddPage("help", helpView.Flex, true, false)
-	searchView := mieta.NewSearchView(app, config, mainView, pages, rootDir)
+	searchView := search_view.NewSearchView(app, config, mainView, pages, rootDir)
 	pages.AddPage("search", searchView.Flex, true, false)
 
 	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -58,6 +61,20 @@ func run(rootDir string, config *mieta.Config) {
 			pages.HidePage("help")
 		}
 		return event
+	})
+
+	pages.SetChangedFunc(func() {
+		p := pages.GetPageNames(true)
+		for _, name := range p {
+			log.Printf("Shown page: %s", name)
+			if name == "files" {
+				app.SetFocus(mainView.TreeView)
+			} else if name == "search" {
+				app.SetFocus(searchView.InputField)
+			} else if name == "help" {
+				app.SetFocus(helpView.CloseButton)
+			}
+		}
 	})
 
 	if err := app.SetRoot(pages, true).SetFocus(mainView.TreeView).Run(); err != nil {

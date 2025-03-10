@@ -1,4 +1,4 @@
-package mieta
+package search_view
 
 import (
 	"bufio"
@@ -7,6 +7,9 @@ import (
 	"github.com/alecthomas/chroma/quick"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/tokuhirom/mieta/mieta"
+	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/files_view"
 	"github.com/tokuhirom/mieta/mieta/search"
 	"io"
 	"log"
@@ -28,8 +31,8 @@ type SearchResult struct {
 // SearchView represents the search functionality view
 type SearchView struct {
 	Application    *tview.Application
-	Config         *Config
-	MainView       *MainView
+	Config         *config.Config
+	FilesView      *files_view.FilesView
 	Pages          *tview.Pages
 	Flex           *tview.Flex
 	InputField     *tview.InputField
@@ -45,7 +48,7 @@ type SearchView struct {
 }
 
 // NewSearchView creates a new search view
-func NewSearchView(app *tview.Application, config *Config, mainView *MainView, pages *tview.Pages, rootDir string) *SearchView {
+func NewSearchView(app *tview.Application, config *config.Config, filesView *files_view.FilesView, pages *tview.Pages, rootDir string) *SearchView {
 	// Create input field for search query
 	inputField := tview.NewInputField().
 		SetLabel("Search: ").
@@ -94,7 +97,7 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 	searchView := &SearchView{
 		Application:  app,
 		Config:       config,
-		MainView:     mainView,
+		FilesView:    filesView,
 		Pages:        pages,
 		Flex:         flex,
 		InputField:   inputField,
@@ -130,7 +133,7 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 			return nil
 		case tcell.KeyEscape:
 			pages.SwitchToPage("background")
-			app.SetFocus(mainView.TreeView)
+			app.SetFocus(filesView.TreeView)
 			return nil
 		default:
 			return event
@@ -138,71 +141,21 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 	})
 
 	// Set up result list key capture
+	_, keycodeKeymap, runeKeymap := GetSearchKeymap(config)
 	resultList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		//goland:noinspection GoSwitchMissingCasesForIotaConsts
-		switch event.Key() {
-		case tcell.KeyEscape:
-			searchView.ShowMainView()
-			return nil
-		case tcell.KeyUp:
-			searchView.ShowPreviousItem()
-			return nil
-		case tcell.KeyDown:
-			searchView.ShowNextItem()
+		// キーコードに対応するハンドラを実行
+		if handler, ok := keycodeKeymap[event.Key()]; ok {
+			handler(searchView)
 			return nil
 		}
 
-		switch event.Rune() {
-		case 'S':
-			app.SetFocus(inputField)
-			return nil
-		case 'w':
-			searchView.ShowPreviousItem()
-			return nil
-		case 's':
-			searchView.ShowNextItem()
-			return nil
-		case 'q':
-			searchView.ShowMainView()
-			return nil
-		case 'h':
-			row, col := contentView.GetScrollOffset()
-			if col > 0 {
-				contentView.ScrollTo(row, col-1)
+		// ルーンに対応するハンドラを実行
+		if event.Key() == tcell.KeyRune {
+			if handler, ok := runeKeymap[event.Rune()]; ok {
+				handler(searchView)
+				return nil
 			}
-			return nil
-		case 'j':
-			row, col := contentView.GetScrollOffset()
-			contentView.ScrollTo(row+1, col)
-			return nil
-		case 'e':
-			searchView.Edit()
-			return nil
-		case 'k':
-			row, col := contentView.GetScrollOffset()
-			if row > 0 {
-				contentView.ScrollTo(row-1, col)
-			}
-			return nil
-		case 'l':
-			row, col := contentView.GetScrollOffset()
-			contentView.ScrollTo(row, col+1)
-			return nil
-		case 'G':
-			contentView.ScrollToEnd()
-			return nil
-		case 'H':
-			_, _, width, _ := leftFlex.GetRect()
-			flex.ResizeItem(leftFlex, width-2, 1)
-		case 'L':
-			_, _, width, _ := leftFlex.GetRect()
-			flex.ResizeItem(leftFlex, width+2, 1)
 		}
-		return event
-	})
-
-	// Set up content view key capture
-	contentView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	})
 
@@ -567,9 +520,9 @@ func (s *SearchView) loadFileContent(path string, lineNumber int) {
 	}
 }
 
-func (s *SearchView) ShowMainView() {
+func (s *SearchView) ShowFilesView() {
 	s.Pages.SwitchToPage("background")
-	s.Application.SetFocus(s.MainView.TreeView)
+	s.Application.SetFocus(s.FilesView.TreeView)
 }
 
 func (s *SearchView) Edit() {
@@ -578,7 +531,7 @@ func (s *SearchView) Edit() {
 		return
 	}
 
-	OpenInEditor(s.Application, s.Config,
+	mieta.OpenInEditor(s.Application, s.Config,
 		result.FilePath,
 		result.LineNumber)
 

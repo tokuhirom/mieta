@@ -3,6 +3,7 @@ package mieta
 import (
 	"fmt"
 	"github.com/rivo/tview"
+	"github.com/tokuhirom/mieta/mieta/config"
 	"log"
 	"os"
 	"os/exec"
@@ -10,7 +11,7 @@ import (
 )
 
 // OpenInEditor opens the file in an external editor
-func OpenInEditor(app *tview.Application, config *Config, filePath string, lineNumber int) {
+func OpenInEditor(app *tview.Application, config *config.Config, filePath string, lineNumber int) {
 	// エディタコマンドを取得
 	editorCmd := config.Editor
 	if editorCmd == "" {
