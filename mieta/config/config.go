@@ -27,8 +27,9 @@ type Config struct {
 	Search SearchConfig `toml:"search"`
 
 	// Keymaps
-	FilesKeyMap map[string]string `toml:"keymap.files"`
-	HelpKeyMap  map[string]string `toml:"keymap.help"`
+	FilesKeyMap  map[string]string `toml:"keymap.files"`
+	HelpKeyMap   map[string]string `toml:"keymap.help"`
+	SearchKeyMap map[string]string `toml:"keymap.search"`
 }
 
 // LoadConfig は設定ファイルを読み込みます

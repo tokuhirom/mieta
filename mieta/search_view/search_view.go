@@ -141,71 +141,21 @@ func NewSearchView(app *tview.Application, config *config.Config, filesView *fil
 	})
 
 	// Set up result list key capture
+	keycodeKeymap, runeKeymap := GetSearchKeymap(config)
 	resultList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		//goland:noinspection GoSwitchMissingCasesForIotaConsts
-		switch event.Key() {
-		case tcell.KeyEscape:
-			searchView.ShowFilesView()
-			return nil
-		case tcell.KeyUp:
-			searchView.ShowPreviousItem()
-			return nil
-		case tcell.KeyDown:
-			searchView.ShowNextItem()
+		// キーコードに対応するハンドラを実行
+		if handler, ok := keycodeKeymap[event.Key()]; ok {
+			handler(searchView)
 			return nil
 		}
 
-		switch event.Rune() {
-		case 'S':
-			app.SetFocus(inputField)
-			return nil
-		case 'w':
-			searchView.ShowPreviousItem()
-			return nil
-		case 's':
-			searchView.ShowNextItem()
-			return nil
-		case 'q':
-			searchView.ShowFilesView()
-			return nil
-		case 'h':
-			row, col := contentView.GetScrollOffset()
-			if col > 0 {
-				contentView.ScrollTo(row, col-1)
+		// ルーンに対応するハンドラを実行
+		if event.Key() == tcell.KeyRune {
+			if handler, ok := runeKeymap[event.Rune()]; ok {
+				handler(searchView)
+				return nil
 			}
-			return nil
-		case 'j':
-			row, col := contentView.GetScrollOffset()
-			contentView.ScrollTo(row+1, col)
-			return nil
-		case 'e':
-			searchView.Edit()
-			return nil
-		case 'k':
-			row, col := contentView.GetScrollOffset()
-			if row > 0 {
-				contentView.ScrollTo(row-1, col)
-			}
-			return nil
-		case 'l':
-			row, col := contentView.GetScrollOffset()
-			contentView.ScrollTo(row, col+1)
-			return nil
-		case 'G':
-			contentView.ScrollToEnd()
-			return nil
-		case 'H':
-			_, _, width, _ := leftFlex.GetRect()
-			flex.ResizeItem(leftFlex, width-2, 1)
-		case 'L':
-			_, _, width, _ := leftFlex.GetRect()
-			flex.ResizeItem(leftFlex, width+2, 1)
 		}
-		return event
-	})
-
-	// Set up content view key capture
-	contentView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	})
 
