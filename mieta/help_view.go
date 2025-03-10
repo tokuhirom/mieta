@@ -45,13 +45,6 @@ func NewHelpView(pages *tview.Pages) *HelpView {
 	textView := tview.NewTextView().
 		SetText(HelpMessage)
 	textView.SetBorder(true)
-	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case rune(tcell.KeyEscape):
-			pages.HidePage("help")
-		}
-		return event
-	})
 
 	closeButton := tview.NewButton("OK")
 	closeButton.SetSelectedFunc(func() {
@@ -66,6 +59,29 @@ func NewHelpView(pages *tview.Pages) *HelpView {
 			AddItem(closeButton, 1, 1, true).
 			AddItem(nil, 0, 1, false), width, 1, true).
 		AddItem(nil, 0, 1, false)
+
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			pages.HidePage("help")
+			return nil
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'j':
+				row, col := textView.GetScrollOffset()
+				textView.ScrollTo(row+1, col)
+				return nil
+			case 'k':
+				row, col := textView.GetScrollOffset()
+				textView.ScrollTo(row-1, col)
+				return nil
+			default:
+				return event
+			}
+		default:
+			return event
+		}
+	})
 
 	return &HelpView{
 		Flex:        flex,
