@@ -6,7 +6,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/tokuhirom/mieta/mieta/config"
 	"github.com/tokuhirom/mieta/mieta/files_view"
-	"strings"
+	"github.com/tokuhirom/mieta/mieta/search_view"
 )
 
 const HelpMessage = `Help
@@ -41,14 +41,29 @@ type HelpView struct {
 	Pages       *tview.Pages
 }
 
-func generateHelpMessage(config *config.Config) string {
-	keymap, _, _ := files_view.GetFilesKeymap(config)
-	//search_keymap := search_view.GetSearchKeymap(config)
-
-	buf := "# Files\n"
+func helpFoo(prefix string, keymap map[string]string) string {
+	buf := ""
 	for key, val := range keymap {
-		buf += fmt.Sprintf("\n`%v`: %v", key, strings.TrimLeft(val, "Files"))
+		if key == " " {
+			key = "` `"
+		}
+		buf += fmt.Sprintf("\n%8v: %v", key, val[len(prefix):])
 	}
+	return buf
+}
+
+func generateHelpMessage(config *config.Config) string {
+	buf := ""
+
+	keymap, _, _ := files_view.GetFilesKeymap(config)
+	buf += "# Files\n" + helpFoo("Files", keymap)
+
+	keymap, _, _ = search_view.GetSearchKeymap(config)
+	buf += "\n\n# Search\n" + helpFoo("Search", keymap)
+
+	keymap, _, _ = GetHelpKeymap(config)
+	buf += "\n\n# Help\n" + helpFoo("Help", keymap)
+
 	return buf
 }
 
@@ -86,7 +101,7 @@ func NewHelpView(pages *tview.Pages, config *config.Config) *HelpView {
 		CloseButton: closeButton,
 	}
 
-	keycodeKeymap, runeKeymap := GetHelpKeymap(config)
+	_, keycodeKeymap, runeKeymap := GetHelpKeymap(config)
 
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		handler, ok := keycodeKeymap[event.Key()]

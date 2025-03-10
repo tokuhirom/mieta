@@ -12,10 +12,16 @@ func GetKeyName2KeyCode() map[string]tcell.Key {
 	for keyCode, keyName := range tcell.KeyNames {
 		keyName2keyCode[strings.ToLower(keyName)] = keyCode
 	}
+	// なぜか抜けてるので追加
+	keyName2keyCode["ctrl-h"] = tcell.KeyCtrlH
+	keyName2keyCode["ctrl-i"] = tcell.KeyCtrlI
+	keyName2keyCode["ctrl-m"] = tcell.KeyCtrlM
+
 	return keyName2keyCode
 }
 
 func ProcessKeymap[T any](
+	title string,
 	defaultKeymap map[string]string,
 	userKeymap map[string]string,
 	functionMap map[string]T,
@@ -52,7 +58,7 @@ func ProcessKeymap[T any](
 			// handle as rune
 			runeKeymaps[rune(key[0])] = fun
 		} else {
-			keyCode, ok := keyName2keyCode[key]
+			keyCode, ok := keyName2keyCode[strings.ToLower(key)]
 			if !ok {
 				// 利用可能なキー名のリストを作成
 				availableKeys := make([]string, 0, len(keyName2keyCode))
@@ -61,7 +67,8 @@ func ProcessKeymap[T any](
 				}
 				// ソートして読みやすくする
 				sort.Strings(availableKeys)
-				log.Fatalf("Unknown keyname %s in configuration file.\nAvailable key names are: %s",
+				log.Fatalf("[%s] Unknown keyname '%s' in configuration file.\nAvailable key names are: %s",
+					title,
 					key, strings.Join(availableKeys, ", "))
 			}
 			keycodeKeymaps[keyCode] = fun

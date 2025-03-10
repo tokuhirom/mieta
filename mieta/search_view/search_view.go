@@ -141,7 +141,7 @@ func NewSearchView(app *tview.Application, config *config.Config, filesView *fil
 	})
 
 	// Set up result list key capture
-	keycodeKeymap, runeKeymap := GetSearchKeymap(config)
+	_, keycodeKeymap, runeKeymap := GetSearchKeymap(config)
 	resultList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// キーコードに対応するハンドラを実行
 		if handler, ok := keycodeKeymap[event.Key()]; ok {

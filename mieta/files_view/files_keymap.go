@@ -44,5 +44,5 @@ var DefaultKeyMap = map[string]string{
 }
 
 func GetFilesKeymap(config *config.Config) (map[string]string, map[tcell.Key]FilesViewHandler, map[rune]FilesViewHandler) {
-	return keymap.ProcessKeymap(DefaultKeyMap, config.FilesKeyMap, FilesFunctions)
+	return keymap.ProcessKeymap("files", DefaultKeyMap, config.FilesKeyMap, FilesFunctions)
 }
