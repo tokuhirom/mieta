@@ -246,8 +246,8 @@ func (s *SearchView) updateStatusBar() {
 
 	driverName := s.searchDriver.Name()
 
-	statusText := fmt.Sprintf("[yellow]Driver[white]: %s | [yellow]Ctrl-R[white]: Regex (%s) | [yellow]Ctrl-I[white]: Case (%s) | [yellow]Esc[white]: Exit",
-		driverName, regexStatus, caseStatus)
+	statusText := fmt.Sprintf("[yellow]C-i[white]: Case (%s) | [yellow]C-r[white]: Regex (%s) | [yellow]Driver[white]: %s | [yellow]Esc[white]: Exit",
+		caseStatus, regexStatus, driverName)
 
 	// Find the status bar (third item in the left flex)
 	leftFlex := s.Flex.GetItem(0).(*tview.Flex)
