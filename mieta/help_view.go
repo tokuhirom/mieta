@@ -33,9 +33,11 @@ const HelpMessage = `Help
 type HelpView struct {
 	Flex        *tview.Flex
 	CloseButton *tview.Button
+	TextView    *tview.TextView
+	Pages       *tview.Pages
 }
 
-func NewHelpView(pages *tview.Pages) *HelpView {
+func NewHelpView(pages *tview.Pages, config *Config) *HelpView {
 	// modal always show the text as align-center.
 	// it's hard coded. so, we need to create a new flex layout manually.
 	// we can't use tview.NewModal() because it's not flexible.
@@ -60,31 +62,46 @@ func NewHelpView(pages *tview.Pages) *HelpView {
 			AddItem(nil, 0, 1, false), width, 1, true).
 		AddItem(nil, 0, 1, false)
 
-	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEscape:
-			pages.HidePage("help")
-			return nil
-		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'j':
-				row, col := textView.GetScrollOffset()
-				textView.ScrollTo(row+1, col)
-				return nil
-			case 'k':
-				row, col := textView.GetScrollOffset()
-				textView.ScrollTo(row-1, col)
-				return nil
-			default:
-				return event
-			}
-		default:
-			return event
-		}
-	})
-
-	return &HelpView{
+	helpView := &HelpView{
 		Flex:        flex,
+		TextView:    textView,
+		Pages:       pages,
 		CloseButton: closeButton,
 	}
+
+	keycodeKeymap, runeKeymap := config.GetHelpKeymap()
+
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		handler, ok := keycodeKeymap[event.Key()]
+		if ok {
+			handler(helpView)
+			return nil
+		}
+
+		if event.Key() == tcell.KeyRune {
+			handler, ok := runeKeymap[event.Rune()]
+			if ok {
+				handler(helpView)
+				return nil
+			}
+		}
+
+		return event
+	})
+
+	return helpView
+}
+
+func HelpHidePage(view *HelpView) {
+	view.Pages.HidePage("help")
+}
+
+func HelpScrollUp(view *HelpView) {
+	row, col := view.TextView.GetScrollOffset()
+	view.TextView.ScrollTo(row-1, col)
+}
+
+func HelpScrollDown(view *HelpView) {
+	row, col := view.TextView.GetScrollOffset()
+	view.TextView.ScrollTo(row+1, col)
 }

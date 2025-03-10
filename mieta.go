@@ -44,7 +44,7 @@ func run(rootDir string, config *mieta.Config) {
 	app := tview.NewApplication()
 
 	pages := tview.NewPages()
-	helpView := mieta.NewHelpView(pages)
+	helpView := mieta.NewHelpView(pages, config)
 	mainView := mieta.NewMainView(rootDir, config, app, pages, helpView)
 	pages.AddPage("background", mainView.Flex, true, true)
 	pages.AddPage("help", helpView.Flex, true, false)
