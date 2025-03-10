@@ -54,3 +54,26 @@ func OpenInEditor(app *tview.Application, config *Config, filePath string, lineN
 		}
 	})
 }
+
+func GetCurrentLineNumber(textView *tview.TextView) int {
+	// スクロールオフセットを取得
+	row, _ := textView.GetScrollOffset()
+
+	// 表示領域の高さを取得
+	_, _, _, height := textView.GetRect()
+
+	// 中央の行を計算（表示領域の中央に表示されている行）
+	centerLine := row + height/2
+
+	// 行数が少ない場合は調整
+	totalLines := textView.GetOriginalLineCount()
+	if centerLine >= totalLines {
+		centerLine = totalLines - 1
+	}
+	if centerLine < 0 {
+		centerLine = 0
+	}
+
+	// 1-indexed に変換（エディタは通常1行目から始まる）
+	return centerLine + 1
+}
