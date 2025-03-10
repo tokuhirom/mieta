@@ -188,6 +188,12 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 		case 'G':
 			contentView.ScrollToEnd()
 			return nil
+		case 'H':
+			_, _, width, _ := leftFlex.GetRect()
+			flex.ResizeItem(leftFlex, width-2, 1)
+		case 'L':
+			_, _, width, _ := leftFlex.GetRect()
+			flex.ResizeItem(leftFlex, width+2, 1)
 		}
 		return event
 	})
