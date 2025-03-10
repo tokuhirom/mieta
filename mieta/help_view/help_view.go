@@ -1,8 +1,9 @@
-package mieta
+package help_view
 
 import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/tokuhirom/mieta/mieta/config"
 )
 
 const HelpMessage = `Help
@@ -37,7 +38,7 @@ type HelpView struct {
 	Pages       *tview.Pages
 }
 
-func NewHelpView(pages *tview.Pages, config *Config) *HelpView {
+func NewHelpView(pages *tview.Pages, config *config.Config) *HelpView {
 	// modal always show the text as align-center.
 	// it's hard coded. so, we need to create a new flex layout manually.
 	// we can't use tview.NewModal() because it's not flexible.
@@ -69,7 +70,7 @@ func NewHelpView(pages *tview.Pages, config *Config) *HelpView {
 		CloseButton: closeButton,
 	}
 
-	keycodeKeymap, runeKeymap := config.GetHelpKeymap()
+	keycodeKeymap, runeKeymap := GetHelpKeymap(config)
 
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		handler, ok := keycodeKeymap[event.Key()]
@@ -90,18 +91,4 @@ func NewHelpView(pages *tview.Pages, config *Config) *HelpView {
 	})
 
 	return helpView
-}
-
-func HelpHidePage(view *HelpView) {
-	view.Pages.HidePage("help")
-}
-
-func HelpScrollUp(view *HelpView) {
-	row, col := view.TextView.GetScrollOffset()
-	view.TextView.ScrollTo(row-1, col)
-}
-
-func HelpScrollDown(view *HelpView) {
-	row, col := view.TextView.GetScrollOffset()
-	view.TextView.ScrollTo(row+1, col)
 }

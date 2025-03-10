@@ -1,4 +1,4 @@
-package mieta
+package search_view
 
 import (
 	"bufio"
@@ -7,6 +7,9 @@ import (
 	"github.com/alecthomas/chroma/quick"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/tokuhirom/mieta/mieta"
+	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/files_view"
 	"github.com/tokuhirom/mieta/mieta/search"
 	"io"
 	"log"
@@ -28,8 +31,8 @@ type SearchResult struct {
 // SearchView represents the search functionality view
 type SearchView struct {
 	Application    *tview.Application
-	Config         *Config
-	MainView       *MainView
+	Config         *config.Config
+	FilesView      *files_view.FilesView
 	Pages          *tview.Pages
 	Flex           *tview.Flex
 	InputField     *tview.InputField
@@ -45,7 +48,7 @@ type SearchView struct {
 }
 
 // NewSearchView creates a new search view
-func NewSearchView(app *tview.Application, config *Config, mainView *MainView, pages *tview.Pages, rootDir string) *SearchView {
+func NewSearchView(app *tview.Application, config *config.Config, filesView *files_view.FilesView, pages *tview.Pages, rootDir string) *SearchView {
 	// Create input field for search query
 	inputField := tview.NewInputField().
 		SetLabel("Search: ").
@@ -94,7 +97,7 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 	searchView := &SearchView{
 		Application:  app,
 		Config:       config,
-		MainView:     mainView,
+		FilesView:    filesView,
 		Pages:        pages,
 		Flex:         flex,
 		InputField:   inputField,
@@ -130,7 +133,7 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 			return nil
 		case tcell.KeyEscape:
 			pages.SwitchToPage("background")
-			app.SetFocus(mainView.TreeView)
+			app.SetFocus(filesView.TreeView)
 			return nil
 		default:
 			return event
@@ -142,7 +145,7 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 		//goland:noinspection GoSwitchMissingCasesForIotaConsts
 		switch event.Key() {
 		case tcell.KeyEscape:
-			searchView.ShowMainView()
+			searchView.ShowFilesView()
 			return nil
 		case tcell.KeyUp:
 			searchView.ShowPreviousItem()
@@ -163,7 +166,7 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 			searchView.ShowNextItem()
 			return nil
 		case 'q':
-			searchView.ShowMainView()
+			searchView.ShowFilesView()
 			return nil
 		case 'h':
 			row, col := contentView.GetScrollOffset()
@@ -567,9 +570,9 @@ func (s *SearchView) loadFileContent(path string, lineNumber int) {
 	}
 }
 
-func (s *SearchView) ShowMainView() {
+func (s *SearchView) ShowFilesView() {
 	s.Pages.SwitchToPage("background")
-	s.Application.SetFocus(s.MainView.TreeView)
+	s.Application.SetFocus(s.FilesView.TreeView)
 }
 
 func (s *SearchView) Edit() {
@@ -578,7 +581,7 @@ func (s *SearchView) Edit() {
 		return
 	}
 
-	OpenInEditor(s.Application, s.Config,
+	mieta.OpenInEditor(s.Application, s.Config,
 		result.FilePath,
 		result.LineNumber)
 

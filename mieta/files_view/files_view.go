@@ -1,4 +1,4 @@
-package mieta
+package files_view
 
 import (
 	"bytes"
@@ -8,6 +8,9 @@ import (
 	"github.com/rivo/tview"
 	"github.com/srwiley/oksvg"
 	"github.com/srwiley/rasterx"
+	"github.com/tokuhirom/mieta/mieta"
+	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/help_view"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -24,10 +27,11 @@ const (
 	FindingMode
 )
 
-type MainView struct {
+type FilesView struct {
 	Application      *tview.Application
 	Mode             int
-	Config           *Config
+	Config           *config.Config
+	Pages            *tview.Pages
 	Flex             *tview.Flex
 	TreeView         *tview.TreeView
 	PreviewPages     *tview.Pages
@@ -39,6 +43,7 @@ type MainView struct {
 	FindingKeyword     string
 	CurrentLoadingFile string
 	RootDir            string
+	HelpView           *help_view.HelpView
 }
 
 type FileNode struct {
@@ -46,7 +51,7 @@ type FileNode struct {
 	IsDir bool
 }
 
-func NewMainView(rootDir string, config *Config, app *tview.Application, pages *tview.Pages, helpView *HelpView) *MainView {
+func NewFilesView(rootDir string, config *config.Config, app *tview.Application, pages *tview.Pages, helpView *help_view.HelpView) *FilesView {
 	// Create tree view
 	root := tview.NewTreeNode(filepath.Base(rootDir))
 	root.SetReference(&FileNode{
@@ -81,9 +86,11 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
-	mainView := &MainView{
+	filesView := &FilesView{
 		Application:      app,
 		Config:           config,
+		Pages:            pages,
+		HelpView:         helpView,
 		Flex:             flex,
 		TreeView:         treeView,
 		PreviewPages:     previewPages,
@@ -92,88 +99,92 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 		RootDir:          rootDir,
 	}
 
+	keycodeKeymap, runeKeymap := GetFilesKeymap(config)
+
 	// キーバインド設定
 	treeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch mainView.Mode {
+		switch filesView.Mode {
 		case FindingMode:
 			log.Printf("FindingMode: %v", event.Key())
 			switch event.Key() {
 			case tcell.KeyEscape:
 				treeView.SetTitle("")
-				mainView.Mode = TreeMode
-				treeView.SetCurrentNode(mainView.NodeBeforeFinding)
-				mainView.FindingKeyword = ""
+				filesView.Mode = TreeMode
+				treeView.SetCurrentNode(filesView.NodeBeforeFinding)
+				filesView.FindingKeyword = ""
 			case tcell.KeyEnter:
 				treeView.SetTitle("")
-				mainView.Mode = TreeMode
-				mainView.FindingKeyword = ""
+				filesView.Mode = TreeMode
+				filesView.FindingKeyword = ""
 			case tcell.KeyDEL:
-				if len(mainView.FindingKeyword) > 0 {
-					mainView.FindingKeyword = mainView.FindingKeyword[:len(mainView.FindingKeyword)-1]
-					mainView.TreeView.SetTitle(mainView.FindingKeyword)
-					mainView.findByKeyword()
+				if len(filesView.FindingKeyword) > 0 {
+					filesView.FindingKeyword = filesView.FindingKeyword[:len(filesView.FindingKeyword)-1]
+					filesView.TreeView.SetTitle(filesView.FindingKeyword)
+					filesView.findByKeyword()
 				}
 			case tcell.KeyRune:
-				mainView.FindingKeyword += string(event.Rune())
-				mainView.TreeView.SetTitle(mainView.FindingKeyword)
-				mainView.findByKeyword()
+				filesView.FindingKeyword += string(event.Rune())
+				filesView.TreeView.SetTitle(filesView.FindingKeyword)
+				filesView.findByKeyword()
 			}
 		case TreeMode:
+			// キーコードに対応するハンドラを実行
+			if handler, ok := keycodeKeymap[event.Key()]; ok {
+				handler(filesView)
+				return nil
+			}
+
+			// ルーンに対応するハンドラを実行
 			if event.Key() == tcell.KeyRune {
-				switch event.Rune() {
-				case 'f':
-					// goto find file mode
-					treeView.SetTitle("🔎")
-					mainView.Mode = FindingMode
-					mainView.NodeBeforeFinding = treeView.GetCurrentNode()
-					mainView.FindingKeyword = ""
-				case 'j':
-					row, col := previewTextView.GetScrollOffset()
-					previewTextView.ScrollTo(row+9, col)
-				case 'k':
-					row, col := previewTextView.GetScrollOffset()
-					previewTextView.ScrollTo(row-9, col)
-				case 'q':
-					app.Stop()
-				case '?':
-					pages.ShowPage("help")
-					app.SetFocus(helpView.CloseButton)
-				case 'w':
-					treeView.Move(-1)
-				case 's':
-					treeView.Move(1)
-				case 'S':
-					pages.ShowPage("search")
-				case 'e':
-					mainView.Edit()
+				if handler, ok := runeKeymap[event.Rune()]; ok {
+					handler(filesView)
 					return nil
-				case 'a':
-					mainView.NavigateUp()
-				case 'd':
-					mainView.expand()
-				case ' ':
-					row, col := previewTextView.GetScrollOffset()
-					_, _, _, height := previewTextView.GetRect()
-					if previewTextView.GetOriginalLineCount() <= row+height {
-						// Try to find the next node
-						// TODO: This is not working correctly
-						//currentNode := treeView.GetCurrentNode()
-						//if currentNode.GetNextSibling() != nil {
-						//	treeView.SetCurrentNode(currentNode.GetNextSibling())
-						//} else {
-						//	previewTextView.ScrollTo(row+9, col)
-						//}
-					} else {
-						previewTextView.ScrollTo(row+9, col)
-					}
-				case 'H':
-					_, _, width, _ := treeView.GetRect()
-					flex.ResizeItem(treeView, width-2, 1)
-				case 'L':
-					_, _, width, _ := treeView.GetRect()
-					flex.ResizeItem(treeView, width+2, 1)
 				}
 			}
+			//if event.Key() == tcell.KeyRune {
+			//	switch event.Rune() {
+			//	case 'f':
+			//		// goto find file mode
+			//		treeView.SetTitle("🔎")
+			//		filesView.Mode = FindingMode
+			//		filesView.NodeBeforeFinding = treeView.GetCurrentNode()
+			//		filesView.FindingKeyword = ""
+			//	case 'w':
+			//		treeView.Move(-1)
+			//	case 's':
+			//		treeView.Move(1)
+			//	case 'S':
+			//		pages.ShowPage("search")
+			//	case 'e':
+			//		filesView.Edit()
+			//		return nil
+			//	case 'a':
+			//		filesView.NavigateUp()
+			//	case 'd':
+			//		filesView.expand()
+			//	case ' ':
+			//		row, col := previewTextView.GetScrollOffset()
+			//		_, _, _, height := previewTextView.GetRect()
+			//		if previewTextView.GetOriginalLineCount() <= row+height {
+			//			// Try to find the next node
+			//			// TODO: This is not working correctly
+			//			//currentNode := treeView.GetCurrentNode()
+			//			//if currentNode.GetNextSibling() != nil {
+			//			//	treeView.SetCurrentNode(currentNode.GetNextSibling())
+			//			//} else {
+			//			//	previewTextView.ScrollTo(row+9, col)
+			//			//}
+			//		} else {
+			//			previewTextView.ScrollTo(row+9, col)
+			//		}
+			//	case 'H':
+			//		_, _, width, _ := treeView.GetRect()
+			//		flex.ResizeItem(treeView, width-2, 1)
+			//	case 'L':
+			//		_, _, width, _ := treeView.GetRect()
+			//		flex.ResizeItem(treeView, width+2, 1)
+			//	}
+			//}
 		}
 		return nil
 	})
@@ -191,24 +202,24 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 
 		if !fileNode.IsDir {
 			// Load file content
-			mainView.CurrentLoadingFile = path
+			filesView.CurrentLoadingFile = path
 			previewTextView.SetTitle(path)
 			previewTextView.SetText("[blue]Loading...")
 			previewPages.SwitchToPage("text")
-			go mainView.loadFileContent(config, path)
+			go filesView.loadFileContent(config, path)
 		}
 	})
 
 	// Initial loading of the root directory
-	if err := mainView.loadDirectoryContents(root, rootDir); err != nil {
+	if err := filesView.loadDirectoryContents(root, rootDir); err != nil {
 		log.Printf("Error loading root directory: %v", err)
 	}
 
-	return mainView
+	return filesView
 }
 
 // loadDirectoryContents loads the contents of a directory into a tree node
-func (m *MainView) loadDirectoryContents(node *tview.TreeNode, path string) error {
+func (m *FilesView) loadDirectoryContents(node *tview.TreeNode, path string) error {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -241,7 +252,7 @@ func (m *MainView) loadDirectoryContents(node *tview.TreeNode, path string) erro
 }
 
 // loadFileContent loads and displays file content in the text view with syntax highlighting
-func (m *MainView) loadFileContent(config *Config, path string) {
+func (m *FilesView) loadFileContent(config *config.Config, path string) {
 	fileExt := filepath.Ext(path)
 	if fileExt == ".jpg" || fileExt == ".jpeg" || fileExt == ".png" || fileExt == ".gif" || fileExt == ".svg" {
 		log.Printf("Loading image: %s", path)
@@ -251,7 +262,7 @@ func (m *MainView) loadFileContent(config *Config, path string) {
 	}
 }
 
-func (m *MainView) ShowPreviewImage(path string, image *image.Image) {
+func (m *FilesView) ShowPreviewImage(path string, image *image.Image) {
 	m.Application.QueueUpdateDraw(func() {
 		if m.CurrentLoadingFile == path {
 			log.Printf("Displaying image: %s", path)
@@ -264,7 +275,7 @@ func (m *MainView) ShowPreviewImage(path string, image *image.Image) {
 	})
 }
 
-func (m *MainView) ShowPreviewText(path string, text string) {
+func (m *FilesView) ShowPreviewText(path string, text string) {
 	m.Application.QueueUpdateDraw(func() {
 		if m.CurrentLoadingFile == path {
 			log.Printf("Displaying text: %s", path)
@@ -277,7 +288,7 @@ func (m *MainView) ShowPreviewText(path string, text string) {
 	})
 }
 
-func (m *MainView) loadImage(path string, fileExt string) {
+func (m *FilesView) loadImage(path string, fileExt string) {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Printf("Failed to open image file: %v", err)
@@ -325,7 +336,7 @@ func (m *MainView) loadImage(path string, fileExt string) {
 	}
 }
 
-func (m *MainView) loadTextFile(config *Config, path string) {
+func (m *FilesView) loadTextFile(config *config.Config, path string) {
 	m.PreviewPages.SwitchToPage("text")
 
 	log.Printf("Loading %s", path)
@@ -360,7 +371,7 @@ func (m *MainView) loadTextFile(config *Config, path string) {
 	}
 }
 
-func (m *MainView) findByKeyword() {
+func (m *FilesView) findByKeyword() {
 	keyword := strings.ToLower(m.FindingKeyword)
 	log.Printf("Finding: %s", keyword)
 	if keyword == "" {
@@ -408,7 +419,7 @@ func (m *MainView) findByKeyword() {
 	}
 }
 
-func (m *MainView) expand() {
+func (m *FilesView) expand() {
 	node := m.TreeView.GetCurrentNode()
 	reference := node.GetReference()
 	if reference == nil {
@@ -430,28 +441,7 @@ func (m *MainView) expand() {
 	}
 }
 
-func (m *MainView) NavigateUp() {
-	node := m.TreeView.GetCurrentNode()
-	reference := node.GetReference()
-	if reference == nil {
-		return
-	}
-
-	fileNode := reference.(*FileNode)
-	if fileNode.IsDir && node.IsExpanded() {
-		// The current node is a directory and expanded, ust collapse it.
-		node.Collapse()
-		return
-	}
-
-	// move to the parent node
-	path := m.TreeView.GetPath(m.TreeView.GetCurrentNode())
-	if len(path) > 2 {
-		m.TreeView.SetCurrentNode(path[len(path)-2])
-	}
-}
-
-func (m *MainView) Edit() {
+func (m *FilesView) Edit() {
 	node := m.TreeView.GetCurrentNode()
 	reference := node.GetReference()
 	if reference == nil {
@@ -464,6 +454,6 @@ func (m *MainView) Edit() {
 	}
 
 	// Open in external editor
-	lineNumber := GetCurrentLineNumber(m.PreviewTextView)
-	OpenInEditor(m.Application, m.Config, fileNode.Path, lineNumber)
+	lineNumber := mieta.GetCurrentLineNumber(m.PreviewTextView)
+	mieta.OpenInEditor(m.Application, m.Config, fileNode.Path, lineNumber)
 }
