@@ -172,6 +172,9 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 			row, col := contentView.GetScrollOffset()
 			contentView.ScrollTo(row+1, col)
 			return nil
+		case 'e':
+			searchView.Edit()
+			return nil
 		case 'k':
 			row, col := contentView.GetScrollOffset()
 			if row > 0 {
@@ -467,7 +470,12 @@ func (s *SearchView) loadFileContent(path string, lineNumber int) {
 		s.ContentView.SetText(fmt.Sprintf("[red]Error opening file: %v", err))
 		return
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}(file)
 
 	// Read file content
 	content, err := io.ReadAll(file)
@@ -506,6 +514,21 @@ func (s *SearchView) loadFileContent(path string, lineNumber int) {
 func (s *SearchView) ShowMainView() {
 	s.Pages.SwitchToPage("background")
 	s.Application.SetFocus(s.MainView.TreeView)
+}
+
+func (s *SearchView) Edit() {
+	result := s.SearchResults[s.ResultList.GetCurrentItem()]
+	if result.IsError {
+		return
+	}
+
+	OpenInEditor(s.Application, s.Config,
+		result.FilePath,
+		result.LineNumber)
+
+	// reload content
+	index := s.ResultList.GetCurrentItem()
+	s.ShowItem(index)
 }
 
 // logWriter is a simple io.Writer that logs output to the application log

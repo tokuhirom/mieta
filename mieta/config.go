@@ -20,6 +20,9 @@ type Config struct {
 	// ハイライト処理を行うファイルサイズの上限（バイト）
 	HighlightLimit int `toml:"highlight_limit"`
 
+	// 外部エディタの設定
+	Editor string `toml:"editor"`
+
 	// 検索関連の設定
 	Search SearchConfig `toml:"search"`
 }
@@ -79,6 +82,23 @@ extra_opts = []
 				} else {
 					log.Printf("デフォルト設定ファイルを作成しました: %s", configPath)
 				}
+			}
+		}
+	}
+
+	// エディタの設定がない場合は環境変数 EDITOR を使用
+	if config.Editor == "" {
+		config.Editor = os.Getenv("EDITOR")
+		// それでも設定がない場合はデフォルト値を設定
+		if config.Editor == "" {
+			// プラットフォームに応じてデフォルト値を設定
+			if _, err := os.Stat("/usr/bin/vim"); err == nil {
+				config.Editor = "vim"
+			} else if _, err := os.Stat("/usr/bin/nano"); err == nil {
+				config.Editor = "nano"
+			} else {
+				// 最終的なフォールバック
+				config.Editor = "vi"
 			}
 		}
 	}
