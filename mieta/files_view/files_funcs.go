@@ -89,28 +89,19 @@ func FilesScrollPageDown(view *FilesView) {
 
 // FilesDecreaseTreeWidth はツリービューの幅を減らします
 func FilesDecreaseTreeWidth(view *FilesView) {
-	_, _, width, _ := view.TreeView.GetRect()
-	view.Flex.ResizeItem(view.TreeView, width-2, 1)
+	_, _, width, _ := view.LeftPane.GetRect()
+	view.Flex.ResizeItem(view.LeftPane, width-2, 1)
 }
 
 // FilesIncreaseTreeWidth はツリービューの幅を増やします
 func FilesIncreaseTreeWidth(view *FilesView) {
-	_, _, width, _ := view.TreeView.GetRect()
-	view.Flex.ResizeItem(view.TreeView, width+2, 1)
+	_, _, width, _ := view.LeftPane.GetRect()
+	view.Flex.ResizeItem(view.LeftPane, width+2, 1)
 }
 
 // FilesEnterFindMode は検索モードに入ります
 func FilesEnterFindMode(view *FilesView) {
-	view.TreeView.SetTitle("🔎")
-	view.Mode = FindingMode
+	view.LeftPane.AddItem(view.SearchBox, 1, 0, true)
+	view.Application.SetFocus(view.SearchBox)
 	view.NodeBeforeFinding = view.TreeView.GetCurrentNode()
-	view.FindingKeyword = ""
-}
-
-// FilesExitFindMode は検索モードを終了します
-func FilesExitFindMode(view *FilesView) {
-	view.TreeView.SetTitle("")
-	view.Mode = TreeMode
-	view.TreeView.SetCurrentNode(view.NodeBeforeFinding)
-	view.FindingKeyword = ""
 }

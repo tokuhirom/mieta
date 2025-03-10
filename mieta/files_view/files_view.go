@@ -21,14 +21,8 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	TreeMode = iota
-	FindingMode
-)
-
 type FilesView struct {
 	Application      *tview.Application
-	Mode             int
 	Config           *config.Config
 	Pages            *tview.Pages
 	Flex             *tview.Flex
@@ -42,6 +36,8 @@ type FilesView struct {
 	FindingKeyword     string
 	CurrentLoadingFile string
 	RootDir            string
+	LeftPane           *tview.Flex
+	SearchBox          *tview.InputField
 }
 
 type FileNode struct {
@@ -78,9 +74,16 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 	previewPages.AddPage("text", previewTextView, true, true)
 	previewPages.AddPage("image", previewImageView, true, false)
 
+	searchBox := tview.NewInputField().
+		SetLabel("🔎: ")
+
+	leftPane := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(treeView, 0, 1, true)
+
 	// Layout
 	flex := tview.NewFlex().
-		AddItem(treeView, 30, 1, true).
+		AddItem(leftPane, 30, 1, false).
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
@@ -89,6 +92,8 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		Config:           config,
 		Pages:            pages,
 		Flex:             flex,
+		LeftPane:         leftPane,
+		SearchBox:        searchBox,
 		TreeView:         treeView,
 		PreviewPages:     previewPages,
 		PreviewTextView:  previewTextView,
@@ -98,92 +103,43 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 
 	_, keycodeKeymap, runeKeymap := GetFilesKeymap(config)
 
+	searchBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			searchBox.SetText("")
+			// remove search box from the leftPane
+			leftPane.RemoveItem(searchBox)
+			app.SetFocus(treeView)
+			return nil
+		case tcell.KeyEscape:
+			treeView.SetCurrentNode(filesView.NodeBeforeFinding)
+			searchBox.SetText("")
+			leftPane.RemoveItem(searchBox)
+			app.SetFocus(treeView)
+			return nil
+		default:
+			return event
+		}
+	})
+	searchBox.SetChangedFunc(func(text string) {
+		filesView.findByKeyword(text)
+	})
+
 	// キーバインド設定
 	treeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch filesView.Mode {
-		case FindingMode:
-			log.Printf("FindingMode: %v", event.Key())
-			switch event.Key() {
-			case tcell.KeyEscape:
-				treeView.SetTitle("")
-				filesView.Mode = TreeMode
-				treeView.SetCurrentNode(filesView.NodeBeforeFinding)
-				filesView.FindingKeyword = ""
-			case tcell.KeyEnter:
-				treeView.SetTitle("")
-				filesView.Mode = TreeMode
-				filesView.FindingKeyword = ""
-			case tcell.KeyDEL:
-				if len(filesView.FindingKeyword) > 0 {
-					filesView.FindingKeyword = filesView.FindingKeyword[:len(filesView.FindingKeyword)-1]
-					filesView.TreeView.SetTitle(filesView.FindingKeyword)
-					filesView.findByKeyword()
-				}
-			case tcell.KeyRune:
-				filesView.FindingKeyword += string(event.Rune())
-				filesView.TreeView.SetTitle(filesView.FindingKeyword)
-				filesView.findByKeyword()
-			}
-		case TreeMode:
-			// キーコードに対応するハンドラを実行
-			if handler, ok := keycodeKeymap[event.Key()]; ok {
+		if handler, ok := keycodeKeymap[event.Key()]; ok {
+			handler(filesView)
+			return nil
+		}
+
+		if event.Key() == tcell.KeyRune {
+			if handler, ok := runeKeymap[event.Rune()]; ok {
 				handler(filesView)
 				return nil
 			}
-
-			// ルーンに対応するハンドラを実行
-			if event.Key() == tcell.KeyRune {
-				if handler, ok := runeKeymap[event.Rune()]; ok {
-					handler(filesView)
-					return nil
-				}
-			}
-			//if event.Key() == tcell.KeyRune {
-			//	switch event.Rune() {
-			//	case 'f':
-			//		// goto find file mode
-			//		treeView.SetTitle("🔎")
-			//		filesView.Mode = FindingMode
-			//		filesView.NodeBeforeFinding = treeView.GetCurrentNode()
-			//		filesView.FindingKeyword = ""
-			//	case 'w':
-			//		treeView.Move(-1)
-			//	case 's':
-			//		treeView.Move(1)
-			//	case 'S':
-			//		pages.ShowPage("search")
-			//	case 'e':
-			//		filesView.Edit()
-			//		return nil
-			//	case 'a':
-			//		filesView.NavigateUp()
-			//	case 'd':
-			//		filesView.expand()
-			//	case ' ':
-			//		row, col := previewTextView.GetScrollOffset()
-			//		_, _, _, height := previewTextView.GetRect()
-			//		if previewTextView.GetOriginalLineCount() <= row+height {
-			//			// Try to find the next node
-			//			// TODO: This is not working correctly
-			//			//currentNode := treeView.GetCurrentNode()
-			//			//if currentNode.GetNextSibling() != nil {
-			//			//	treeView.SetCurrentNode(currentNode.GetNextSibling())
-			//			//} else {
-			//			//	previewTextView.ScrollTo(row+9, col)
-			//			//}
-			//		} else {
-			//			previewTextView.ScrollTo(row+9, col)
-			//		}
-			//	case 'H':
-			//		_, _, width, _ := treeView.GetRect()
-			//		flex.ResizeItem(treeView, width-2, 1)
-			//	case 'L':
-			//		_, _, width, _ := treeView.GetRect()
-			//		flex.ResizeItem(treeView, width+2, 1)
-			//	}
-			//}
 		}
-		return nil
+
+		return event
 	})
 
 	treeView.SetChangedFunc(func(node *tview.TreeNode) {
@@ -204,6 +160,10 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 			previewTextView.SetText("[blue]Loading...")
 			previewPages.SwitchToPage("text")
 			go filesView.loadFileContent(config, path)
+		} else {
+			previewTextView.SetTitle(path)
+			previewTextView.SetText("[yellow]Directory...")
+			previewPages.SwitchToPage("text")
 		}
 	})
 
@@ -368,8 +328,8 @@ func (m *FilesView) loadTextFile(config *config.Config, path string) {
 	}
 }
 
-func (m *FilesView) findByKeyword() {
-	keyword := strings.ToLower(m.FindingKeyword)
+func (m *FilesView) findByKeyword(keyword string) {
+	keyword = strings.ToLower(keyword)
 	log.Printf("Finding: %s", keyword)
 	if keyword == "" {
 		return

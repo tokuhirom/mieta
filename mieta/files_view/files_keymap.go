@@ -23,7 +23,6 @@ var FilesFunctions = map[string]FilesViewHandler{
 	"FilesDecreaseTreeWidth": FilesDecreaseTreeWidth,
 	"FilesIncreaseTreeWidth": FilesIncreaseTreeWidth,
 	"FilesEnterFindMode":     FilesEnterFindMode,
-	"FilesExitFindMode":      FilesExitFindMode,
 }
 
 var DefaultKeyMap = map[string]string{
