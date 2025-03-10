@@ -134,59 +134,34 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 		}
 	})
 
-	// Set up result list behavior
-	resultList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		if index >= 0 && index < len(searchView.SearchResults) {
-			result := searchView.SearchResults[index]
-			if result.IsError {
-				// エラーメッセージの場合はそのまま表示
-				searchView.ContentView.Clear()
-				searchView.ContentView.SetTitle("Error")
-				searchView.ContentView.SetText(fmt.Sprintf("[red]%s", result.MatchedLine))
-			} else {
-				// 通常の検索結果の場合はファイル内容を表示
-				searchView.loadFileContent(result.FilePath, result.LineNumber)
-			}
-			app.SetFocus(contentView)
-		}
-	})
-
 	// Set up result list key capture
 	resultList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		//goland:noinspection GoSwitchMissingCasesForIotaConsts
 		switch event.Key() {
 		case tcell.KeyEscape:
-			pages.SwitchToPage("background")
-			app.SetFocus(mainView.TreeView)
+			searchView.ShowMainView()
+			return nil
+		case tcell.KeyUp:
+			searchView.ShowPreviousItem()
+			return nil
+		case tcell.KeyDown:
+			searchView.ShowNextItem()
 			return nil
 		}
 
 		switch event.Rune() {
 		case 'S':
-			inputField.Focus(nil)
+			app.SetFocus(inputField)
 			return nil
 		case 'w':
-			index := resultList.GetCurrentItem()
-			if index > 0 {
-				resultList.SetCurrentItem(index - 1)
-			}
+			searchView.ShowPreviousItem()
 			return nil
 		case 's':
-			index := resultList.GetCurrentItem()
-			if index < resultList.GetItemCount()-1 {
-				resultList.SetCurrentItem(index + 1)
-			}
+			searchView.ShowNextItem()
 			return nil
 		case 'q':
-			pages.SwitchToPage("background")
-			app.SetFocus(mainView.TreeView)
+			searchView.ShowMainView()
 			return nil
-		}
-		return event
-	})
-
-	// Set up content view key capture
-	contentView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
 		case 'h':
 			row, col := contentView.GetScrollOffset()
 			if col > 0 {
@@ -210,22 +185,48 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 		case 'G':
 			contentView.ScrollToEnd()
 			return nil
-		case 'q':
-			pages.SwitchToPage("background")
-			app.SetFocus(mainView.TreeView)
-			return nil
 		}
+		return event
+	})
 
-		if event.Key() == tcell.KeyEscape {
-			pages.SwitchToPage("background")
-			app.SetFocus(mainView.TreeView)
-			return nil
-		}
+	// Set up content view key capture
+	contentView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	})
 
 	searchView.updateStatusBar()
 	return searchView
+}
+
+func (s *SearchView) ShowNextItem() {
+	index := s.ResultList.GetCurrentItem()
+	if index < s.ResultList.GetItemCount()-1 {
+		s.ResultList.SetCurrentItem(index + 1)
+		s.ShowItem(index + 1)
+	}
+}
+
+func (s *SearchView) ShowPreviousItem() {
+	index := s.ResultList.GetCurrentItem()
+	if index > 0 {
+		s.ResultList.SetCurrentItem(index - 1)
+		s.ShowItem(index - 1)
+	}
+}
+
+func (s *SearchView) ShowItem(index int) {
+	if index >= 0 && index < len(s.SearchResults) {
+		result := s.SearchResults[index]
+		if result.IsError {
+			// エラーメッセージの場合はそのまま表示
+			s.ContentView.Clear()
+			s.ContentView.SetTitle("Error")
+			s.ContentView.SetText(fmt.Sprintf("[red]%s", result.MatchedLine))
+		} else {
+			// 通常の検索結果の場合はファイル内容を表示
+			s.loadFileContent(result.FilePath, result.LineNumber)
+		}
+	}
 }
 
 // updateStatusBar updates the status bar text based on current settings
@@ -500,6 +501,11 @@ func (s *SearchView) loadFileContent(path string, lineNumber int) {
 		}
 		s.ContentView.ScrollTo(targetLine, 0)
 	}
+}
+
+func (s *SearchView) ShowMainView() {
+	s.Pages.SwitchToPage("background")
+	s.Application.SetFocus(s.MainView.TreeView)
 }
 
 // logWriter is a simple io.Writer that logs output to the application log
