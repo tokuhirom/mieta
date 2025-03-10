@@ -142,6 +142,11 @@ func NewMainView(rootDir string, config *Config, app *tview.Application, pages *
 					treeView.Move(-1)
 				case 's':
 					treeView.Move(1)
+				case 'S':
+					pages.ShowPage("search")
+				case 'e':
+					mainView.Edit()
+					return nil
 				case 'a':
 					mainView.NavigateUp()
 				case 'd':
@@ -444,4 +449,21 @@ func (m *MainView) NavigateUp() {
 	if len(path) > 2 {
 		m.TreeView.SetCurrentNode(path[len(path)-2])
 	}
+}
+
+func (m *MainView) Edit() {
+	node := m.TreeView.GetCurrentNode()
+	reference := node.GetReference()
+	if reference == nil {
+		return
+	}
+
+	fileNode := reference.(*FileNode)
+	if fileNode.IsDir {
+		return
+	}
+
+	// Open in external editor
+	lineNumber := GetCurrentLineNumber(m.PreviewTextView)
+	OpenInEditor(m.Application, m.Config, fileNode.Path, lineNumber)
 }

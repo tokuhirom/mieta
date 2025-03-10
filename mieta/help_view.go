@@ -7,11 +7,27 @@ import (
 
 const HelpMessage = `Help
 
- w/s: Move up and down within the tree
- j/k: Scroll by page in the preview
- shift+h/shift+l: Adjust the width of the tree and preview panes
- f: Find a file
- q: Exit the application
+# MIETA Help
+
+## Navigation
+- w/s: Move up/down in tree or list
+- j/k: Scroll preview up/down
+- a: Navigate up/collapse directory
+- d: Expand directory
+- Space: Scroll preview down one page
+- H/L: Adjust panel widths
+
+## Search
+- /: Open search view
+- f: Find files by name
+- Ctrl-R: Toggle regex search
+- Ctrl-I: Toggle case sensitivity
+- h/j/k/l: Navigate in preview
+- G: Go to end of preview
+
+## Other
+- q: Quit
+- ?: Show/hide help
 `
 
 type HelpView struct {
