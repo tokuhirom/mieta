@@ -1,7 +1,7 @@
-# MIETA - CLI Tool for Directory Tree and File Preview
+# MIETA - TUI Tool for Directory Tree and File Preview
 
 ## Overview
-MIETA is a CLI tool that visually displays directory structures in the terminal and allows you to preview the contents of selected files. As the name suggests, it allows you to "see" (MIETA) code and files easily. (The name is, of course, a nod to MIEL.)
+MIETA is a TUI tool that visually displays directory structures in the terminal and allows you to preview the contents of selected files. As the name suggests, it allows you to "see" (MIETA) code and files easily. (The name is, of course, a nod to MIEL.)
 
 | Type            | Image                                   |
 |-----------------|-----------------------------------------|
