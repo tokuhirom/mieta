@@ -9,31 +9,6 @@ import (
 	"github.com/tokuhirom/mieta/mieta/search_view"
 )
 
-const HelpMessage = `Help
-
-# MIETA Help
-
-## Navigation
-- w/s: Move up/down in tree or list
-- j/k: Scroll preview up/down
-- a: Navigate up/collapse directory
-- d: Expand directory
-- Space: Scroll preview down one page
-- H/L: Adjust panel widths
-
-## Search
-- /: Open search view
-- f: Find files by name
-- Ctrl-R: Toggle regex search
-- Ctrl-I: Toggle case sensitivity
-- h/j/k/l: Navigate in preview
-- G: Go to end of preview
-
-## Other
-- q: Quit
-- ?: Show/hide help
-`
-
 type HelpView struct {
 	Flex        *tview.Flex
 	CloseButton *tview.Button
