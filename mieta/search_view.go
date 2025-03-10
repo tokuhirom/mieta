@@ -129,8 +129,9 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 			pages.SwitchToPage("background")
 			app.SetFocus(mainView.TreeView)
 			return nil
+		default:
+			return event
 		}
-		return event
 	})
 
 	// Set up result list behavior
@@ -160,6 +161,9 @@ func NewSearchView(app *tview.Application, config *Config, mainView *MainView, p
 		}
 
 		switch event.Rune() {
+		case 'S':
+			inputField.Focus(nil)
+			return nil
 		case 'w':
 			index := resultList.GetCurrentItem()
 			if index > 0 {
