@@ -48,7 +48,7 @@ func run(rootDir string, config *config.Config) {
 
 	pages := tview.NewPages()
 	helpView := help_view.NewHelpView(pages, config)
-	mainView := files_view.NewFilesView(rootDir, config, app, pages, helpView)
+	mainView := files_view.NewFilesView(rootDir, config, app, pages)
 	pages.AddPage("files", mainView.Flex, true, true)
 	pages.AddPage("help", helpView.Flex, true, false)
 	searchView := search_view.NewSearchView(app, config, mainView, pages, rootDir)

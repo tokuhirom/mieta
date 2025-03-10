@@ -1,9 +1,12 @@
 package help_view
 
 import (
+	"fmt"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/files_view"
+	"strings"
 )
 
 const HelpMessage = `Help
@@ -38,6 +41,17 @@ type HelpView struct {
 	Pages       *tview.Pages
 }
 
+func generateHelpMessage(config *config.Config) string {
+	keymap, _, _ := files_view.GetFilesKeymap(config)
+	//search_keymap := search_view.GetSearchKeymap(config)
+
+	buf := "# Files\n"
+	for key, val := range keymap {
+		buf += fmt.Sprintf("\n`%v`: %v", key, strings.TrimLeft(val, "Files"))
+	}
+	return buf
+}
+
 func NewHelpView(pages *tview.Pages, config *config.Config) *HelpView {
 	// modal always show the text as align-center.
 	// it's hard coded. so, we need to create a new flex layout manually.
@@ -45,8 +59,10 @@ func NewHelpView(pages *tview.Pages, config *config.Config) *HelpView {
 	width := 40
 	height := 10
 
+	helpMessage := generateHelpMessage(config)
+
 	textView := tview.NewTextView().
-		SetText(HelpMessage)
+		SetText(helpMessage)
 	textView.SetBorder(true)
 
 	closeButton := tview.NewButton("OK")

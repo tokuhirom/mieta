@@ -10,7 +10,6 @@ import (
 	"github.com/srwiley/rasterx"
 	"github.com/tokuhirom/mieta/mieta"
 	"github.com/tokuhirom/mieta/mieta/config"
-	"github.com/tokuhirom/mieta/mieta/help_view"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -43,7 +42,6 @@ type FilesView struct {
 	FindingKeyword     string
 	CurrentLoadingFile string
 	RootDir            string
-	HelpView           *help_view.HelpView
 }
 
 type FileNode struct {
@@ -51,7 +49,7 @@ type FileNode struct {
 	IsDir bool
 }
 
-func NewFilesView(rootDir string, config *config.Config, app *tview.Application, pages *tview.Pages, helpView *help_view.HelpView) *FilesView {
+func NewFilesView(rootDir string, config *config.Config, app *tview.Application, pages *tview.Pages) *FilesView {
 	// Create tree view
 	root := tview.NewTreeNode(filepath.Base(rootDir))
 	root.SetReference(&FileNode{
@@ -90,7 +88,6 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		Application:      app,
 		Config:           config,
 		Pages:            pages,
-		HelpView:         helpView,
 		Flex:             flex,
 		TreeView:         treeView,
 		PreviewPages:     previewPages,
@@ -99,7 +96,7 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		RootDir:          rootDir,
 	}
 
-	keycodeKeymap, runeKeymap := GetFilesKeymap(config)
+	_, keycodeKeymap, runeKeymap := GetFilesKeymap(config)
 
 	// キーバインド設定
 	treeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
