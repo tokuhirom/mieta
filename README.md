@@ -3,7 +3,14 @@
 ## Overview
 MIETA is a CLI tool that visually displays directory structures in the terminal and allows you to preview the contents of selected files. As the name suggests, it allows you to "see" (MIETA) code and files easily. (The name is, of course, a nod to MIEL.)
 
-![img.png](img.png)
+| Type            | Image                                   |
+|-----------------|-----------------------------------------|
+| Preview Text    | ![preview_text.png](preview_text.png)   |
+| Preview Image   | ![preview_image.png](preview_image.png) |
+| Searching       | ![search.png](search.png)               |
+
+
+
 
 ## Install
 
