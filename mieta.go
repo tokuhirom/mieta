@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/gdamore/tcell/v2"
 	_ "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/tokuhirom/mieta/mieta/config"
@@ -54,14 +53,14 @@ func run(rootDir string, config *config.Config) {
 	searchView := search_view.NewSearchView(app, config, mainView, pages, rootDir)
 	pages.AddPage("search", searchView.Flex, true, false)
 
-	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEscape:
-			log.Printf("Hide help page")
-			pages.HidePage("help")
-		}
-		return event
-	})
+	//pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	//	switch event.Key() {
+	//	case tcell.KeyEscape:
+	//		log.Printf("Hide help page")
+	//		pages.HidePage("help")
+	//	}
+	//	return event
+	//})
 
 	pages.SetChangedFunc(func() {
 		p := pages.GetPageNames(true)
