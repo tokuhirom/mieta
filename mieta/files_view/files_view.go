@@ -10,6 +10,7 @@ import (
 	"github.com/srwiley/rasterx"
 	"github.com/tokuhirom/mieta/mieta"
 	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/git"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -38,6 +39,7 @@ type FilesView struct {
 	RootDir            string
 	LeftPane           *tview.Flex
 	SearchBox          *tview.InputField
+	IgnoreDetectionCh  chan *tview.TreeNode
 }
 
 type FileNode struct {
@@ -87,18 +89,21 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
+	ignoreDetectionCh := make(chan *tview.TreeNode, 100)
+
 	filesView := &FilesView{
-		Application:      app,
-		Config:           config,
-		Pages:            pages,
-		Flex:             flex,
-		LeftPane:         leftPane,
-		SearchBox:        searchBox,
-		TreeView:         treeView,
-		PreviewPages:     previewPages,
-		PreviewTextView:  previewTextView,
-		PreviewImageView: previewImageView,
-		RootDir:          rootDir,
+		Application:       app,
+		Config:            config,
+		Pages:             pages,
+		Flex:              flex,
+		LeftPane:          leftPane,
+		SearchBox:         searchBox,
+		TreeView:          treeView,
+		PreviewPages:      previewPages,
+		PreviewTextView:   previewTextView,
+		PreviewImageView:  previewImageView,
+		RootDir:           rootDir,
+		IgnoreDetectionCh: ignoreDetectionCh,
 	}
 
 	_, keycodeKeymap, runeKeymap := GetFilesKeymap(config)
@@ -167,6 +172,8 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		}
 	})
 
+	go filesView.RunGitIgnoreDetector()
+
 	// Initial loading of the root directory
 	if err := filesView.loadDirectoryContents(root, rootDir); err != nil {
 		log.Printf("Error loading root directory: %v", err)
@@ -201,7 +208,8 @@ func (m *FilesView) loadDirectoryContents(node *tview.TreeNode, path string) err
 			IsDir: isDir,
 		})
 
-		// Add to parent
+		m.IgnoreDetectionCh <- childNode
+
 		node.AddChild(childNode)
 	}
 
@@ -413,4 +421,34 @@ func (m *FilesView) Edit() {
 	// Open in external editor
 	lineNumber := mieta.GetCurrentLineNumber(m.PreviewTextView)
 	mieta.OpenInEditor(m.Application, m.Config, fileNode.Path, lineNumber)
+}
+
+func (m *FilesView) RunGitIgnoreDetector() {
+	for {
+		node, ok := <-m.IgnoreDetectionCh
+		if !ok {
+			// チャネルがクローズされた場合
+			fmt.Println("Channel closed, exiting processor")
+			return
+		}
+
+		reference := node.GetReference()
+		if reference == nil {
+			continue
+		}
+
+		fileNode := reference.(*FileNode)
+
+		ignored, err := git.IsEffectivelyIgnored(fileNode.Path)
+		if err != nil {
+			log.Printf("Failed to check if file is ignored: %v", err)
+			continue
+		}
+
+		if ignored || fileNode.Path == ".git" {
+			m.Application.QueueUpdateDraw(func() {
+				node.SetColor(tcell.ColorDarkGray)
+			})
+		}
+	}
 }
