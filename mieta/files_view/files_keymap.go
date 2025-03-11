@@ -26,20 +26,22 @@ var FilesFunctions = map[string]FilesViewHandler{
 }
 
 var DefaultKeyMap = map[string]string{
-	"j": "FilesScrollDown",
-	"k": "FilesScrollUp",
-	"q": "FilesQuit",
-	"?": "FilesShowHelp",
-	"w": "FilesMoveUp",
-	"s": "FilesMoveDown",
-	"S": "FilesShowSearch",
-	"e": "FilesEdit",
-	"a": "FilesNavigateUp",
-	"d": "FilesExpand",
-	" ": "FilesScrollPageDown",
-	"H": "FilesDecreaseTreeWidth",
-	"L": "FilesIncreaseTreeWidth",
-	"f": "FilesEnterFindMode",
+	"j":     "FilesScrollDown",
+	"k":     "FilesScrollUp",
+	"q":     "FilesQuit",
+	"?":     "FilesShowHelp",
+	"w":     "FilesMoveUp",
+	"s":     "FilesMoveDown",
+	"S":     "FilesShowSearch",
+	"e":     "FilesEdit",
+	"a":     "FilesNavigateUp",
+	"left":  "FilesNavigateUp",
+	"d":     "FilesExpand",
+	"right": "FilesExpand",
+	" ":     "FilesScrollPageDown",
+	"H":     "FilesDecreaseTreeWidth",
+	"L":     "FilesIncreaseTreeWidth",
+	"f":     "FilesEnterFindMode",
 }
 
 func GetFilesKeymap(config *config.Config) (map[string]string, map[tcell.Key]FilesViewHandler, map[rune]FilesViewHandler) {
