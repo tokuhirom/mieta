@@ -40,11 +40,11 @@ type FilesView struct {
 	RootDir            string
 	LeftPane           *tview.Flex
 	SearchBox          *tview.InputField
-	IgnoreDetectionCh  chan *tview.TreeNode
 
 	// 読み込み中のディレクトリを追跡するためのマップとそのロック
 	loadingDirs      map[string]bool
 	loadingDirsMutex sync.Mutex
+	gitTracker       *git.GitTracker
 }
 
 type FileNode struct {
@@ -94,22 +94,26 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
-	ignoreDetectionCh := make(chan *tview.TreeNode, 100)
+	gitTarcker := git.NewGitTracker()
+	err := gitTarcker.Initialize()
+	if err != nil {
+		log.Printf("Error initializing git tracker: %v", err)
+	}
 
 	filesView := &FilesView{
-		Application:       app,
-		Config:            config,
-		Pages:             pages,
-		Flex:              flex,
-		LeftPane:          leftPane,
-		SearchBox:         searchBox,
-		TreeView:          treeView,
-		PreviewPages:      previewPages,
-		PreviewTextView:   previewTextView,
-		PreviewImageView:  previewImageView,
-		RootDir:           rootDir,
-		IgnoreDetectionCh: ignoreDetectionCh,
-		loadingDirs:       make(map[string]bool),
+		Application:      app,
+		Config:           config,
+		Pages:            pages,
+		Flex:             flex,
+		LeftPane:         leftPane,
+		SearchBox:        searchBox,
+		TreeView:         treeView,
+		PreviewPages:     previewPages,
+		PreviewTextView:  previewTextView,
+		PreviewImageView: previewImageView,
+		RootDir:          rootDir,
+		gitTracker:       gitTarcker,
+		loadingDirs:      make(map[string]bool),
 	}
 
 	_, keycodeKeymap, runeKeymap := GetFilesKeymap(config)
@@ -177,8 +181,6 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 			previewPages.SwitchToPage("text")
 		}
 	})
-
-	go filesView.RunGitIgnoreDetector()
 
 	// Initial loading of the root directory
 	if err := filesView.loadDirectoryContents(root, rootDir); err != nil {
@@ -256,7 +258,11 @@ func (m *FilesView) loadDirectoryContents(node *tview.TreeNode, path string) err
 				IsDir: isDir,
 			})
 
-			m.IgnoreDetectionCh <- childNode
+			ignored := m.gitTracker.IsIgnored(filePath)
+			if ignored {
+				childNode.SetColor(tcell.ColorDarkGray)
+			}
+
 			batch = append(batch, childNode)
 
 			if len(batch) >= batchSize || file == files[len(files)-1] {
@@ -488,9 +494,6 @@ func (m *FilesView) expand() {
 			if err := m.loadDirectoryContents(node, path); err != nil {
 				log.Printf("Error loading directory: %v", err)
 			}
-		} else {
-			// 子ノードがあれば折りたたむ
-			node.Collapse()
 		}
 	} else {
 		// 展開されていない場合は展開
@@ -520,34 +523,4 @@ func (m *FilesView) Edit() {
 	// Open in external editor
 	lineNumber := mieta.GetCurrentLineNumber(m.PreviewTextView)
 	mieta.OpenInEditor(m.Application, m.Config, fileNode.Path, lineNumber)
-}
-
-func (m *FilesView) RunGitIgnoreDetector() {
-	for {
-		node, ok := <-m.IgnoreDetectionCh
-		if !ok {
-			// チャネルがクローズされた場合
-			fmt.Println("Channel closed, exiting processor")
-			return
-		}
-
-		reference := node.GetReference()
-		if reference == nil {
-			continue
-		}
-
-		fileNode := reference.(*FileNode)
-
-		ignored, err := git.IsEffectivelyIgnored(fileNode.Path)
-		if err != nil {
-			log.Printf("Failed to check if file is ignored: %v", err)
-			continue
-		}
-
-		if ignored || fileNode.Path == ".git" {
-			m.Application.QueueUpdateDraw(func() {
-				node.SetColor(tcell.ColorDarkGray)
-			})
-		}
-	}
 }
