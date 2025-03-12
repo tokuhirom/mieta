@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/alecthomas/chroma/quick"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/srwiley/oksvg"
@@ -50,6 +51,10 @@ type FilesView struct {
 	loadingDirs      map[string]bool
 	loadingDirsMutex sync.Mutex
 	gitTracker       *git.GitTracker
+
+	watcher      *fsnotify.Watcher
+	watchedDirs  map[string]bool
+	watcherMutex sync.Mutex
 }
 
 type FileNode struct {
@@ -130,6 +135,11 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		log.Printf("Error initializing git tracker: %v", err)
 	}
 
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Printf("Error creating fsnotify watcher: %v", err)
+	}
+
 	filesView := &FilesView{
 		Application:        app,
 		Config:             config,
@@ -147,6 +157,9 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 
 		gitTracker:  gitTarcker,
 		loadingDirs: make(map[string]bool),
+
+		watcher:     watcher,
+		watchedDirs: make(map[string]bool),
 	}
 
 	inlineSearchBox.SetChangedFunc(func(text string) {
@@ -223,6 +236,15 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 	if err := filesView.loadDirectoryContents(root, rootDir); err != nil {
 		log.Printf("Error loading root directory: %v", err)
 	}
+
+	{
+		filesView.watcherMutex.Lock()
+		defer filesView.watcherMutex.Unlock()
+		filesView.startWatching(rootDir)
+	}
+
+	// fsnotifyイベント処理用のgoroutineを起動
+	go filesView.watchEvents()
 
 	return filesView
 }
@@ -653,4 +675,210 @@ func (m *FilesView) findPrev() {
 	highlightKey := fmt.Sprintf("highlight-%d", m.CurrentHighlightId)
 	m.PreviewTextView.Highlight(highlightKey)
 	m.PreviewTextView.ScrollToHighlight()
+}
+
+func (m *FilesView) startWatching(path string) {
+	// 既に監視中なら何もしない
+	if m.watchedDirs[path] {
+		return
+	}
+
+	// ディレクトリを監視対象に追加
+	err := m.watcher.Add(path)
+	if err != nil {
+		log.Printf("Error watching directory %s: %v", path, err)
+		return
+	}
+
+	m.watchedDirs[path] = true
+	log.Printf("Started watching directory: %s", path)
+
+	// サブディレクトリも再帰的に監視
+	files, err := os.ReadDir(path)
+	if err != nil {
+		log.Printf("Error reading directory %s: %v", path, err)
+		return
+	}
+
+	log.Printf("Found %d files", len(files))
+	for _, file := range files {
+		if file.IsDir() {
+			subPath := filepath.Join(path, file.Name())
+			m.startWatching(subPath)
+		}
+	}
+
+	log.Printf("Started watching directory: %s", path)
+}
+
+func (m *FilesView) watchEvents() {
+	for {
+		select {
+		case event, ok := <-m.watcher.Events:
+			if !ok {
+				return
+			}
+
+			// イベント処理
+			m.handleFsEvent(event)
+
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("Watcher error: %v", err)
+		}
+	}
+}
+
+func (m *FilesView) handleFsEvent(event fsnotify.Event) {
+	if event.Op&fsnotify.Chmod == fsnotify.Chmod {
+		// git generates too much Chmod events. ignore it.
+		return
+	}
+
+	log.Printf("FS event: %v", event)
+
+	// ディレクトリの作成イベント
+	if event.Op&fsnotify.Create == fsnotify.Create {
+		fileInfo, err := os.Stat(event.Name)
+		if err != nil {
+			log.Printf("Error getting file info for %s: %v", event.Name, err)
+			return
+		}
+
+		// 新しいディレクトリが作成された場合は監視対象に追加
+		if fileInfo.IsDir() {
+			m.startWatching(event.Name)
+		}
+
+		// UIツリーに新しいノードを追加
+		m.Application.QueueUpdateDraw(func() {
+			m.addNodeForPath(event.Name, fileInfo.IsDir())
+		})
+	}
+
+	// ファイル/ディレクトリの削除イベント
+	if event.Op&fsnotify.Remove == fsnotify.Remove {
+		m.Application.QueueUpdateDraw(func() {
+			m.removeNodeForPath(event.Name)
+		})
+
+		// 監視リストから削除
+		m.watcherMutex.Lock()
+		delete(m.watchedDirs, event.Name)
+		m.watcherMutex.Unlock()
+	}
+
+	// ファイルの変更イベント
+	if event.Op&fsnotify.Write == fsnotify.Write {
+		// 現在表示中のファイルが変更された場合は再読み込み
+		if m.CurrentLoadingFile == event.Name {
+			go m.loadFileContent(m.Config, event.Name)
+		}
+	}
+}
+
+// パスに対応するノードをツリーに追加する関数
+func (m *FilesView) addNodeForPath(path string, isDir bool) {
+	// パスの親ディレクトリを特定
+	parentPath := filepath.Dir(path)
+	fileName := filepath.Base(path)
+
+	// 親ノードを探す
+	parentNode := m.findNodeByPath(m.TreeView.GetRoot(), parentPath)
+	if parentNode == nil {
+		log.Printf("Cannot find parent node for %s", path)
+		return
+	}
+
+	// 既に同名のノードがあるか確認
+	for _, child := range parentNode.GetChildren() {
+		ref := child.GetReference()
+		if ref == nil {
+			continue
+		}
+
+		fileNode := ref.(*FileNode)
+		if fileNode.Path == path {
+			// 既に存在する場合は何もしない
+			return
+		}
+	}
+
+	// 新しいノードを作成
+	var newNode *tview.TreeNode
+	if isDir {
+		newNode = tview.NewTreeNode("📁" + fileName + "/")
+	} else {
+		newNode = tview.NewTreeNode("📄" + fileName)
+	}
+
+	newNode.SetReference(&FileNode{
+		Path:  path,
+		IsDir: isDir,
+	})
+
+	// Gitで無視されているかチェック
+	ignored := m.gitTracker.IsIgnored(path)
+	if ignored {
+		newNode.SetColor(tcell.ColorDarkGray)
+	}
+
+	// 親ノードに追加
+	parentNode.AddChild(newNode)
+}
+
+func (m *FilesView) removeNodeForPath(path string) {
+	// 親パスを特定
+	parentPath := filepath.Dir(path)
+
+	// 親ノードを探す
+	parentNode := m.findNodeByPath(m.TreeView.GetRoot(), parentPath)
+	if parentNode == nil {
+		return
+	}
+
+	// 子ノードを探して削除
+	for _, child := range parentNode.GetChildren() {
+		ref := child.GetReference()
+		if ref == nil {
+			continue
+		}
+
+		fileNode := ref.(*FileNode)
+		if fileNode.Path == path {
+			parentNode.RemoveChild(child)
+			return
+		}
+	}
+}
+
+// パスからノードを探す関数
+func (m *FilesView) findNodeByPath(node *tview.TreeNode, path string) *tview.TreeNode {
+	ref := node.GetReference()
+	if ref == nil {
+		return nil
+	}
+
+	fileNode := ref.(*FileNode)
+	if fileNode.Path == path {
+		return node
+	}
+
+	// 子ノードを再帰的に探索
+	for _, child := range node.GetChildren() {
+		if found := m.findNodeByPath(child, path); found != nil {
+			return found
+		}
+	}
+
+	return nil
+}
+
+// アプリケーション終了時にウォッチャーをクローズするメソッドを追加
+func (m *FilesView) Close() {
+	if m.watcher != nil {
+		m.watcher.Close()
+	}
 }
