@@ -9,9 +9,6 @@ MIETA is a TUI tool that visually displays directory structures in the terminal 
 | Preview Image   | ![preview_image.png](preview_image.png) |
 | Searching       | ![search.png](search.png)               |
 
-
-
-
 ## Install
 
 ```bash
@@ -22,7 +19,7 @@ go install github.com/tokuhirom/mieta@latest
 
 ### Directory Tree Display
 -  Displays directory structure in a tree format
--  Automatically excludes `.git` directories
+-  Automatically excludes `.git` directories and respects `.gitignore` patterns
 -  Tree display is asynchronous, ensuring the UI is not blocked even with large directories
 
 ### File Preview
@@ -45,13 +42,9 @@ go install github.com/tokuhirom/mieta@latest
 -  Supports common editors (vim, emacs, nano, VS Code) with proper line number handling
 
 ### Keyboard Navigation
--  `w`/`s`: Move up and down within the tree or search results
--  `j`/`k`: Scroll by page in the preview
--  `shift+h`/`shift+l`: Adjust the width of the tree and preview panes
--  `f`: Find files by name
--  `S`: Open search view for full text search
--  `e`: Open current file in external editor
--  `q`: Exit the application
+-  Intuitive keyboard shortcuts for efficient navigation
+-  File finding by name with incremental search
+-  Customizable keybindings through configuration
 
 ### Layout
 -  Displays the directory tree on the left and file preview on the right
@@ -61,6 +54,7 @@ go install github.com/tokuhirom/mieta@latest
 -  TOML configuration file for customizing behavior
 -  Configurable syntax highlighting themes
 -  Customizable search tools and options
+-  Customizable keybindings
 
 ## Command Line Arguments
 -  Allows specifying a directory path at startup
@@ -110,33 +104,58 @@ driver = "ag"
 
 # Search options
 # extra_opts = ["--hidden", "--follow"]
+
+# Keybindings customization
+[keymap.files]
+# Override default keybindings for files view
+# "j" = "FilesScrollDown"
+# "k" = "FilesScrollUp"
+# "e" = "FilesEdit"
+
+[keymap.help]
+# Override default keybindings for help view
+# "j" = "HelpScrollDown"
+# "k" = "HelpScrollUp"
+
+[keymap.search]
+# Override default keybindings for search view
+# "j" = "SearchScrollDown"
+# "k" = "SearchScrollUp"
+# "e" = "SearchEdit"
 ```
 
 ## Keyboard Shortcuts
 
-### Navigation
-- `w`/`s`: Move up/down in tree or search results
-- `j`/`k`: Scroll preview up/down
-- `a`: Navigate up/collapse directory
-- `d`: Expand directory
+### Files View
+- `j`/`k`: Scroll preview down/up
+- `w`/`s`: Move up/down in tree
+- `a` or `left`: Navigate up/collapse directory
+- `d` or `right`: Expand directory
 - `Space`: Scroll preview down one page
-- `H`/`L`: Adjust panel widths
-
-### Files
+- `H`/`L`: Decrease/increase tree width
 - `e`: Open current file in external editor
-- `f`: Find files by name in the current tree
+- `f`: Enter find mode (find files by name)
+- `/`: Inline search within tree
+- `n`/`N`: Find next/previous match
+- `S`: Open search view
+- `q`: Quit
+- `?`: Show help
 
-### Search
-- `/`: Open search view for full text search
-- `S`: Switch to search mode
+### Help View
+- `j`/`k`: Scroll down/up
+- `Esc` or `Enter`: Hide help page
+
+### Search View
+- `w`/`s` or `Up`/`Down`: Navigate to previous/next search result
+- `j`/`k`: Scroll preview down/up
+- `h`/`l`: Scroll preview left/right
+- `S`: Focus search input
+- `e`: Open current file in external editor
+- `G`: Scroll to end of preview
+- `H`/`L`: Decrease/increase left panel width
 - `Ctrl-R`: Toggle regex search
 - `Ctrl-I`: Toggle case sensitivity
-- `h`/`j`/`k`/`l`: Navigate in preview
-- `G`: Go to end of preview
-
-### Other
-- `q`: Quit
-- `?`: Show/hide help
+- `q` or `Esc`: Exit search view
 
 ## Debug Mode
 
@@ -147,9 +166,9 @@ MIETA_DEBUG=/tmp/mieta.log mieta /path/to/directory
 ```
 
 ## Future Expansion Possibilities
--  Filtering: Filter files by specific extensions or name patterns
--  Custom Keybindings: Support for user-defined keybindings
--  Git Integration: Show git status in the file tree
+
+- Better gitignore support: Respect `.gitignore` rules for filtering files
+- Git Integration: Enhanced git status display in the file tree
 
 ## Contributing
 
@@ -163,7 +182,7 @@ The MIT License (MIT)
 Copyright © 2025 Tokuhiro Matsuno, https://64p.org/ <tokuhirom@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the “Software”), to deal
+of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
@@ -172,7 +191,7 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
