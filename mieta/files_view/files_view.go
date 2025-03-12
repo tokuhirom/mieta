@@ -10,6 +10,7 @@ import (
 	"github.com/srwiley/rasterx"
 	"github.com/tokuhirom/mieta/mieta"
 	"github.com/tokuhirom/mieta/mieta/config"
+	"github.com/tokuhirom/mieta/mieta/git"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -19,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -43,6 +45,11 @@ type FilesView struct {
 	InlineSearchBox    *tview.InputField
 	MaxHighlightId     int
 	CurrentHighlightId int
+
+	// 読み込み中のディレクトリを追跡するためのマップとそのロック
+	loadingDirs      map[string]bool
+	loadingDirsMutex sync.Mutex
+	gitTracker       *git.GitTracker
 }
 
 type FileNode struct {
@@ -117,6 +124,12 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		AddItem(tview.NewBox(), 1, 0, false).
 		AddItem(previewPages, 0, 2, false)
 
+	gitTarcker := git.NewGitTracker()
+	err := gitTarcker.Initialize()
+	if err != nil {
+		log.Printf("Error initializing git tracker: %v", err)
+	}
+
 	filesView := &FilesView{
 		Application:        app,
 		Config:             config,
@@ -131,6 +144,9 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 		PreviewTextView:    previewTextView,
 		PreviewImageView:   previewImageView,
 		RootDir:            rootDir,
+
+		gitTracker:  gitTarcker,
+		loadingDirs: make(map[string]bool),
 	}
 
 	inlineSearchBox.SetChangedFunc(func(text string) {
@@ -213,33 +229,114 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 
 // loadDirectoryContents loads the contents of a directory into a tree node
 func (m *FilesView) loadDirectoryContents(node *tview.TreeNode, path string) error {
-	files, err := os.ReadDir(path)
-	if err != nil {
-		return err
+	// ロックを取得してディレクトリの読み込み状態を確認
+	m.loadingDirsMutex.Lock()
+	if m.loadingDirs[path] {
+		// 既に読み込み中なら何もしない
+		m.loadingDirsMutex.Unlock()
+		return nil
 	}
 
-	// Sort files and directories
-	for _, file := range files {
-		filePath := filepath.Join(path, file.Name())
-		isDir := file.IsDir()
+	// 読み込み中としてマーク
+	m.loadingDirs[path] = true
+	m.loadingDirsMutex.Unlock()
 
-		// Create a new node
-		var childNode *tview.TreeNode
-		if isDir {
-			childNode = tview.NewTreeNode("📁" + file.Name() + "/")
-		} else {
-			childNode = tview.NewTreeNode("📄" + file.Name())
-		}
+	// 読み込み中の表示
+	loadingNode := tview.NewTreeNode("[yellow]Loading...")
 
-		// Set reference data
-		childNode.SetReference(&FileNode{
-			Path:  filePath,
-			IsDir: isDir,
+	go func() {
+		m.Application.QueueUpdateDraw(func() {
+			// 子ノードがすでにあるか確認
+			if len(node.GetChildren()) == 0 {
+				node.AddChild(loadingNode)
+			}
 		})
 
-		// Add to parent
-		node.AddChild(childNode)
-	}
+		// 処理が終了したらマップから削除するための遅延処理
+		defer func() {
+			m.loadingDirsMutex.Lock()
+			delete(m.loadingDirs, path)
+			m.loadingDirsMutex.Unlock()
+		}()
+
+		files, err := os.ReadDir(path)
+		if err != nil {
+			m.Application.QueueUpdateDraw(func() {
+				// ノードがまだ有効かチェック
+				for _, child := range node.GetChildren() {
+					if child == loadingNode {
+						node.RemoveChild(loadingNode)
+						errorNode := tview.NewTreeNode("[red]Error: " + err.Error())
+						node.AddChild(errorNode)
+						break
+					}
+				}
+			})
+			return
+		}
+
+		// ファイルをバッチ処理
+		const batchSize = 50
+		var batch []*tview.TreeNode
+
+		for _, file := range files {
+			filePath := filepath.Join(path, file.Name())
+			isDir := file.IsDir()
+
+			var childNode *tview.TreeNode
+			if isDir {
+				childNode = tview.NewTreeNode("📁" + file.Name() + "/")
+			} else {
+				childNode = tview.NewTreeNode("📄" + file.Name())
+			}
+
+			childNode.SetReference(&FileNode{
+				Path:  filePath,
+				IsDir: isDir,
+			})
+
+			ignored := m.gitTracker.IsIgnored(filePath)
+			if ignored {
+				childNode.SetColor(tcell.ColorDarkGray)
+			}
+
+			batch = append(batch, childNode)
+
+			if len(batch) >= batchSize || file == files[len(files)-1] {
+				nodesToAdd := make([]*tview.TreeNode, len(batch))
+				copy(nodesToAdd, batch)
+
+				m.Application.QueueUpdateDraw(func() {
+					// ノードがまだ有効かチェック
+					stillValid := false
+					for _, child := range node.GetChildren() {
+						if child == loadingNode {
+							stillValid = true
+							break
+						}
+					}
+
+					if stillValid {
+						for _, n := range nodesToAdd {
+							node.AddChild(n)
+						}
+					}
+				})
+
+				batch = batch[:0]
+			}
+		}
+
+		// 読み込み完了後にローディングノードを削除
+		m.Application.QueueUpdateDraw(func() {
+			for _, child := range node.GetChildren() {
+				if child == loadingNode {
+					node.RemoveChild(loadingNode)
+					break
+				}
+			}
+		})
+	}()
 
 	return nil
 }
@@ -426,11 +523,25 @@ func (m *FilesView) expand() {
 		return
 	}
 
-	node.ClearChildren()
-	node.Expand()
+	// ノードが既に展開されているか確認
+	if node.IsExpanded() {
+		// 既に展開されている場合は、子ノードがあるか確認
+		if len(node.GetChildren()) == 0 {
+			// 子ノードがなければ読み込み
+			if err := m.loadDirectoryContents(node, path); err != nil {
+				log.Printf("Error loading directory: %v", err)
+			}
+		}
+	} else {
+		// 展開されていない場合は展開
+		node.Expand()
 
-	if err := m.loadDirectoryContents(node, path); err != nil {
-		log.Printf("Error loading directory: %v", err)
+		// 子ノードがなければ読み込み
+		if len(node.GetChildren()) == 0 {
+			if err := m.loadDirectoryContents(node, path); err != nil {
+				log.Printf("Error loading directory: %v", err)
+			}
+		}
 	}
 }
 
