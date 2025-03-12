@@ -23,6 +23,9 @@ var FilesFunctions = map[string]FilesViewHandler{
 	"FilesDecreaseTreeWidth": FilesDecreaseTreeWidth,
 	"FilesIncreaseTreeWidth": FilesIncreaseTreeWidth,
 	"FilesEnterFindMode":     FilesEnterFindMode,
+	"FilesInlineSearch":      FilesInlineSearch,
+	"FilesFindPrev":          FilesFindPrev,
+	"FilesFindNext":          FilesFindNext,
 }
 
 var DefaultKeyMap = map[string]string{
@@ -42,6 +45,9 @@ var DefaultKeyMap = map[string]string{
 	"H":     "FilesDecreaseTreeWidth",
 	"L":     "FilesIncreaseTreeWidth",
 	"f":     "FilesEnterFindMode",
+	"/":     "FilesInlineSearch",
+	"n":     "FilesFindNext",
+	"N":     "FilesFindPrev",
 }
 
 func GetFilesKeymap(config *config.Config) (map[string]string, map[tcell.Key]FilesViewHandler, map[rune]FilesViewHandler) {

@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -39,7 +40,11 @@ type FilesView struct {
 	CurrentLoadingFile string
 	RootDir            string
 	LeftPane           *tview.Flex
-	SearchBox          *tview.InputField
+	FileNameSearchBox  *tview.InputField
+	PreviewTextWrapper *tview.Flex
+	InlineSearchBox    *tview.InputField
+	MaxHighlightId     int
+	CurrentHighlightId int
 
 	// 読み込み中のディレクトリを追跡するためのマップとそのロック
 	loadingDirs      map[string]bool
@@ -73,16 +78,41 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 	previewTextView.SetBorderColor(tcell.ColorDarkSlateGray)
 	previewTextView.SetBorderPadding(0, 0, 1, 1)
 
+	previewTextWrapper := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(previewTextView, 0, 1, false)
+
 	previewImageView := tview.NewImage()
 	previewImageView.SetBorder(true)
 	previewImageView.SetBorderColor(tcell.ColorDarkSlateGray)
 
 	previewPages := tview.NewPages()
-	previewPages.AddPage("text", previewTextView, true, true)
+	previewPages.AddPage("text", previewTextWrapper, true, true)
 	previewPages.AddPage("image", previewImageView, true, false)
 
-	searchBox := tview.NewInputField().
+	fileNameSearchBox := tview.NewInputField().
 		SetLabel("🔎: ")
+
+	inlineSearchBox := tview.NewInputField().
+		SetLabel("🔎: ")
+
+	inlineSearchBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			// leve from the input search mode
+			previewTextWrapper.RemoveItem(inlineSearchBox)
+			app.SetFocus(treeView)
+			return nil
+		case tcell.KeyEsc:
+			// leave from the input search mode
+			log.Printf("Escaped from the input search mode")
+			previewTextWrapper.RemoveItem(inlineSearchBox)
+			app.SetFocus(treeView)
+			return nil
+		default:
+			return event
+		}
+	})
 
 	leftPane := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -101,42 +131,49 @@ func NewFilesView(rootDir string, config *config.Config, app *tview.Application,
 	}
 
 	filesView := &FilesView{
-		Application:      app,
-		Config:           config,
-		Pages:            pages,
-		Flex:             flex,
-		LeftPane:         leftPane,
-		SearchBox:        searchBox,
-		TreeView:         treeView,
-		PreviewPages:     previewPages,
-		PreviewTextView:  previewTextView,
-		PreviewImageView: previewImageView,
-		RootDir:          rootDir,
-		gitTracker:       gitTarcker,
-		loadingDirs:      make(map[string]bool),
+		Application:        app,
+		Config:             config,
+		Pages:              pages,
+		Flex:               flex,
+		LeftPane:           leftPane,
+		FileNameSearchBox:  fileNameSearchBox,
+		TreeView:           treeView,
+		PreviewPages:       previewPages,
+		PreviewTextWrapper: previewTextWrapper,
+		InlineSearchBox:    inlineSearchBox,
+		PreviewTextView:    previewTextView,
+		PreviewImageView:   previewImageView,
+		RootDir:            rootDir,
+
+		gitTracker:  gitTarcker,
+		loadingDirs: make(map[string]bool),
 	}
+
+	inlineSearchBox.SetChangedFunc(func(text string) {
+		filesView.SearchByKeyword(text)
+	})
 
 	_, keycodeKeymap, runeKeymap := GetFilesKeymap(config)
 
-	searchBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	fileNameSearchBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEnter:
-			searchBox.SetText("")
+			fileNameSearchBox.SetText("")
 			// remove search box from the leftPane
-			leftPane.RemoveItem(searchBox)
+			leftPane.RemoveItem(fileNameSearchBox)
 			app.SetFocus(treeView)
 			return nil
 		case tcell.KeyEscape:
 			treeView.SetCurrentNode(filesView.NodeBeforeFinding)
-			searchBox.SetText("")
-			leftPane.RemoveItem(searchBox)
+			fileNameSearchBox.SetText("")
+			leftPane.RemoveItem(fileNameSearchBox)
 			app.SetFocus(treeView)
 			return nil
 		default:
 			return event
 		}
 	})
-	searchBox.SetChangedFunc(func(text string) {
+	fileNameSearchBox.SetChangedFunc(func(text string) {
 		filesView.findByKeyword(text)
 	})
 
@@ -523,4 +560,97 @@ func (m *FilesView) Edit() {
 	// Open in external editor
 	lineNumber := mieta.GetCurrentLineNumber(m.PreviewTextView)
 	mieta.OpenInEditor(m.Application, m.Config, fileNode.Path, lineNumber)
+}
+
+func (m *FilesView) SearchByKeyword(keyword string) {
+	// TextArea の中で現在表示位置の先頭から検索する｡それが終わったら先頭から現在表示位置の前までを検索する｡
+	// マッチした行があればハイライトする｡
+
+	keyword = strings.ToLower(keyword)
+	log.Printf("Searching for keyword: %s", keyword)
+	if keyword == "" {
+		return
+	}
+
+	// Get the current text from the PreviewTextView
+	text := m.PreviewTextView.GetText(true)
+	lines := strings.Split(text, "\n")
+
+	// Function to check if a line contains the keyword
+	matches := func(line, keyword string) bool {
+		return strings.Contains(strings.ToLower(line), keyword)
+	}
+
+	// Get the current scroll position
+	startRow, _ := m.PreviewTextView.GetScrollOffset()
+
+	re := regexp.MustCompile(`(?i)(` + regexp.QuoteMeta(keyword) + ")")
+
+	firstHighlight := ""
+	highlightId := 0
+
+	// Search from the current position to the end
+	for i := startRow; i < len(lines); i++ {
+		if matches(lines[i], keyword) {
+			log.Printf("Hit: '%v'", lines[i])
+			highlightKey := fmt.Sprintf("highlight-%d", highlightId)
+			if firstHighlight == "" {
+				firstHighlight = highlightKey
+			}
+			highlightId += 1
+			lines[i] = re.ReplaceAllString(lines[i], fmt.Sprintf(`[yellow::u]["%s"]$1[""][-:-:-:-]`, highlightKey))
+		}
+	}
+
+	// Search from the beginning to the current position
+	for i := 0; i < startRow; i++ {
+		if matches(lines[i], keyword) {
+			highlightKey := fmt.Sprintf("highlight-%d", highlightId)
+			if firstHighlight == "" {
+				firstHighlight = highlightKey
+			}
+			highlightId += 1
+			lines[i] = re.ReplaceAllString(lines[i], fmt.Sprintf(`[yellow::u]["%s"]$1[""][-:-:-:-]`, highlightKey))
+			log.Printf("Hit: %s", lines[i])
+		}
+	}
+
+	m.PreviewTextView.SetRegions(true)
+	m.MaxHighlightId = highlightId - 1
+	m.CurrentHighlightId = 0
+
+	if m.MaxHighlightId > 0 {
+		highlightKey := fmt.Sprintf("highlight-%d", m.CurrentHighlightId)
+		m.PreviewTextView.SetText(strings.Join(lines, "\n"))
+		m.PreviewTextView.Highlight(highlightKey)
+		m.PreviewTextView.ScrollToHighlight()
+	}
+}
+
+func (m *FilesView) findNext() {
+	if m.MaxHighlightId > m.CurrentHighlightId {
+		m.CurrentHighlightId += 1
+	} else {
+		m.CurrentHighlightId = 0
+	}
+
+	log.Printf("findNext: %d", m.CurrentHighlightId)
+
+	highlightKey := fmt.Sprintf("highlight-%d", m.CurrentHighlightId)
+	m.PreviewTextView.Highlight(highlightKey)
+	m.PreviewTextView.ScrollToHighlight()
+}
+
+func (m *FilesView) findPrev() {
+	if m.CurrentHighlightId > 0 {
+		m.CurrentHighlightId -= 1
+	} else {
+		m.CurrentHighlightId = m.MaxHighlightId
+	}
+
+	log.Printf("findPrev: %d", m.CurrentHighlightId)
+
+	highlightKey := fmt.Sprintf("highlight-%d", m.CurrentHighlightId)
+	m.PreviewTextView.Highlight(highlightKey)
+	m.PreviewTextView.ScrollToHighlight()
 }
