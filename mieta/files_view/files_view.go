@@ -18,7 +18,7 @@ import (
 	"image/png"
 	"log"
 	"os"
-	"path/filepath"
+	filepath "path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -680,6 +680,12 @@ func (m *FilesView) findPrev() {
 func (m *FilesView) startWatching(path string) {
 	// 既に監視中なら何もしない
 	if m.watchedDirs[path] {
+		return
+	}
+
+	_, file := filepath.Split(path)
+	if file == ".git" {
+		log.Printf("Ignore .git directory: %s", path)
 		return
 	}
 
