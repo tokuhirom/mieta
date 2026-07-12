@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.3](https://github.com/tokuhirom/mieta/compare/v0.0.2...v0.0.3) - 2026-07-12
+- Bump golang.org/x/image from 0.38.0 to 0.41.0 by @dependabot[bot] in https://github.com/tokuhirom/mieta/pull/21
+- Bump golang.org/x/net from 0.38.0 to 0.55.0 by @dependabot[bot] in https://github.com/tokuhirom/mieta/pull/20
+
 ## [v0.0.2](https://github.com/tokuhirom/mieta/compare/v0.0.1...v0.0.2) - 2026-03-31
 - Bump golang.org/x/image from 0.25.0 to 0.38.0 by @dependabot[bot] in https://github.com/tokuhirom/mieta/pull/18
 
